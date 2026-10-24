@@ -239,6 +239,12 @@ class EngineRegressionTests(unittest.TestCase):
         self.assertIsNotNone(options)
         self.assertEqual(options.timeout, 45000)
 
+    def test_empty_rows_are_not_reported_as_verified_extraction(self):
+        result = verify_healed_selectors('<div class="item"><b>A</b></div><div class="item"></div>', ".item", {"name": "b"})
+        self.assertFalse(result["verified"])
+        self.assertEqual(result["matched_row_count"], 2)
+        self.assertIn("1", result["error"])
+
 
 if __name__ == "__main__":
     unittest.main()

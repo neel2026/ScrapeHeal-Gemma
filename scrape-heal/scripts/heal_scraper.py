@@ -84,12 +84,15 @@ def verify_healed_selectors(
                 match = row.select_one(selector)
                 record[field] = " ".join(match.get_text(" ", strip=True).split()) if match else ""
             records.append(record)
-        valid = bool(records) and any(any(value.strip() for value in record.values()) for record in records)
+        empty_rows = sum(not any(value.strip() for value in record.values()) for record in records)
+        valid = bool(records) and empty_rows == 0
         return {
             "verified": valid,
             "matched_row_count": len(rows),
             "deterministic_records": records,
-            "error": None if valid else "No rows or non-empty fields were extracted.",
+            "error": None if valid else (
+                f"{empty_rows} matched rows contain no extracted values." if empty_rows else "No rows were extracted."
+            ),
         }
     except Exception as exc:
         return {"verified": False, "matched_row_count": 0, "deterministic_records": [], "error": str(exc)}
