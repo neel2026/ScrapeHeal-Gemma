@@ -99,14 +99,18 @@ else:
             custom_html = st.text_area("Mutated HTML DOM", height=180, placeholder="Paste the updated page HTML…")
         elif source_mode == "Fetch URL":
             url = st.text_input("Page URL", placeholder="https://example.com/catalog")
-            if url:
+            if st.button("Fetch webpage HTML", disabled=not bool(url)):
                 try:
                     response = requests.get(url, timeout=20, headers={"User-Agent": "ScrapeHeal-Gemma/1.0"})
                     response.raise_for_status()
-                    custom_html = response.text
-                    st.success(f"Loaded {len(custom_html):,} HTML characters")
+                    st.session_state["_url_snapshot"] = {"url": url, "html": response.text}
                 except requests.RequestException as exc:
+                    st.session_state.pop("_url_snapshot", None)
                     st.error(f"Could not fetch the page: {exc}")
+            snapshot = st.session_state.get("_url_snapshot")
+            if snapshot and snapshot["url"] == url:
+                custom_html = snapshot["html"]
+                st.success(f"Loaded snapshot: {len(custom_html):,} HTML characters")
         else:
             html_file = st.file_uploader("HTML file", type=("html", "htm", "txt"))
             if html_file:

@@ -157,6 +157,21 @@ class DashboardRegressionTests(unittest.TestCase):
         self.assertFalse(app.exception)
         self.assertNotIn("heal_result", app.session_state)
 
+    def test_url_fetch_keeps_one_snapshot_until_explicit_refresh(self):
+        response = SimpleNamespace(text='<article><b>A</b></article>', raise_for_status=lambda: None)
+        with mock.patch("requests.get", return_value=response) as get:
+            app = self.dashboard()
+            next(x for x in app.selectbox if x.label == "Scenario").select("Custom Live URL / Screenshot Upload").run()
+            next(x for x in app.radio if x.label == "HTML source").set_value("Fetch URL").run()
+            next(x for x in app.text_input if x.label == "Page URL").set_value("https://example.com/catalog").run()
+            self.assertEqual(get.call_count, 0)
+            next(x for x in app.button if x.label == "Fetch webpage HTML").click().run()
+            self.assertEqual(get.call_count, 1)
+            next(x for x in app.text_input if x.label == "Extraction goal").set_value("Extract name").run()
+            next(x for x in app.button if "Step 1:" in x.label).click().run()
+            self.assertEqual(get.call_count, 1)
+            self.assertFalse(app.exception)
+
 
 class EngineRegressionTests(unittest.TestCase):
     def setUp(self):
