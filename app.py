@@ -232,7 +232,7 @@ with col_right:
             st.code(result.get("healed_xpath", ""), language="xpath")
         tabs = st.tabs(["📊 Verified Extracted Data", "🧠 Gemma 4 Visual & DOM Reasoning", "🐍 Patched Python Scraper", "🧩 Agent Skill (SKILL.md) & CLI"])
         with tabs[0]:
-            st.json(result["verification"]["deterministic_records"])
+            st.dataframe(result["verification"]["deterministic_records"], width="stretch", hide_index=True)
             st.download_button(
                 "Download verified records as JSON",
                 data=json.dumps(result["verification"]["deterministic_records"], ensure_ascii=False, indent=2),
