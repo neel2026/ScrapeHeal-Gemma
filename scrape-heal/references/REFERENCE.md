@@ -26,7 +26,7 @@
 | `patched_python_code` | string | Runnable BeautifulSoup extraction example. |
 | `mermaid_diagram` | string | Mermaid flowchart describing the recovery pipeline. |
 | `verification` | object | `verified`, `matched_row_count`, `deterministic_records`, and `error` from local BeautifulSoup. |
-| `verified_on_dom` | boolean | True only when local selection finds rows with non-empty extracted data. |
+| `verified_on_dom` | boolean | True only when local selection finds rows and every matched row has at least one non-empty extracted value. |
 | `attempts` | integer | 1 normally; 2 if Gemma receives one selector correction request. |
 | `model` / `thinking_level` | string | Selected model and reasoning mode. |
 | `latency_seconds` / `cached` | number / boolean | Elapsed runtime and whether a cached response was reused. |
@@ -47,12 +47,14 @@
 ## Failure and recovery behavior
 
 - Invalid or zero-match legacy selectors are reported as zero matches with the parser error retained when present.
-- A model response must contain JSON with `healed_row_css_selector` and an object-valued `healed_field_selectors`. Invalid JSON fails clearly instead of returning a guessed success.
+- Model JSON must contain all documented analysis, selector, code, diagram, and visual-record fields with valid types, including an integer confidence from 0 to 100. Invalid responses raise a clear error or activate the labeled preset fallback.
 - A failed first verification is sent back to Gemma once. A second failure remains visible in `verification.error`; no records are labeled verified.
 - API/network/quota exceptions are shown to the caller. The dashboard supports built-in offline scenarios; the CLI mock switch is limited to runs without an API key.
-- HTML input is capped at 15,000 characters for a compact request. Use the smallest relevant DOM region if target records are outside the retained portion.
+- Only the model prompt DOM is capped at 15,000 characters. BeautifulSoup verifies selectors against the complete original HTML. Use a focused DOM region if the model cannot see the target records in its retained context.
 - Field selectors are scoped to each row and should resolve to a single element. Missing fields return an empty string and remain visible in records.
-- The API response cache is in-memory and scoped to the current process. Change screenshot, DOM, goal, selector, model, or thinking level to get a new request.
+- Live API requests have a 45-second timeout so a stalled request can activate preset fallback.
+- The in-memory cache separates mock and live modes and includes the complete HTML snapshot. Failed verification and temporary API fallback results are not cached, so the next live attempt can recover.
+- The dashboard clears previous verification when inputs or settings change. Custom URL HTML is fetched only when the fetch button is pressed, keeping one snapshot through both demo steps.
 
 ## Troubleshooting
 
