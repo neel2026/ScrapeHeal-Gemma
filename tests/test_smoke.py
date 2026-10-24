@@ -228,6 +228,10 @@ class DashboardRegressionTests(unittest.TestCase):
         self.assertTrue(app.session_state["heal_result"]["verified_on_dom"])
         self.assertFalse(app.session_state["heal_result"]["offline_mock"])
         self.assertFalse(app.session_state["heal_result"]["offline_fallback"])
+        demo_view = "\n".join(element.value for element in app.markdown)
+        self.assertIn("01 · Broken selector", demo_view)
+        self.assertIn("02 · Gemma 4 repair", demo_view)
+        self.assertIn("03 · Verified football records", demo_view)
 
     def test_live_mode_exposes_books_to_scrape_inputs(self):
         app = self.dashboard()

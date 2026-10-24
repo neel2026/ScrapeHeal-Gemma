@@ -17,6 +17,28 @@ flowchart LR
 
 The dashboard has two one-click walkthroughs: a deterministic football demo and a live Books to Scrape run. The CLI returns the same JSON contract for agent workflows. The model's output is never treated as verified until the local DOM check succeeds.
 
+## Dashboard modes: what the demo proves
+
+### Demo: Football (reliable)
+
+This is a controlled, repeatable walkthrough of the recovery pipeline:
+
+1. The app runs a deliberately outdated football standings selector and shows that it matches **0 rows**.
+2. When a Gemma API key is configured, the app sends the fixture screenshot and DOM to Gemma 4 and asks it to propose replacement selectors.
+3. BeautifulSoup checks the proposed selectors against the fixture HTML. The app displays the repaired selector and the extracted football records only after verification succeeds.
+
+The football page is a built-in fixture with **sample demo records**, not live football standings. The selectors are intentionally stale so judges can reproduce the failure. If no API key is configured, the demo runs in clearly labeled offline mode. If Gemma is unavailable or proposes selectors that fail verification, a locally verified preset keeps the walkthrough usable; the UI labels that fallback. A short pause makes the failure and verification stages visible, while Gemma's actual response time remains unchanged.
+
+### Live: Books to Scrape
+
+This mode exercises the scraper against the current first page of [Books to Scrape](https://books.toscrape.com/):
+
+1. Upload a screenshot of that same first page. The app fetches the live HTML when you run the pipeline.
+2. Gemma 4 receives the screenshot and fetched DOM, then proposes selectors for book titles, prices, and availability.
+3. BeautifulSoup verifies the selectors against the fetched HTML and extracts the records. Live mode reports errors directly and never substitutes the football fixture.
+
+Live mode requires `GEMMA_API_KEY_1` in the ignored `.env` file; `GEMMA_API_KEY_2` is tried if the first key fails. Requests can take up to two minutes. This mode needs network access, a working API key, and a screenshot that matches the fetched page.
+
 ## Open-Weight AI Model & License Compliance
 
 - **Models used:** Google Gemma 4 `gemma-4-26b-a4b-it` and `gemma-4-31b-it`, called through the official `google-genai` Python SDK and Google AI Studio API.
@@ -37,7 +59,7 @@ cp .env.example .env
 streamlit run app.py
 ```
 
-Choose **Demo: Football (reliable)** and click its single button to show the deliberately broken selector followed by its repair. If Gemma keys are configured, Gemma attempts the repair; the verified football preset is the fallback if the model fails or proposes selectors that do not verify. Without keys, the demo runs deterministically offline. Choose **Live: Books to Scrape** to fetch the current site HTML, upload a matching screenshot of its first page, then click the single live-run button. Live mode requires `GEMMA_API_KEY_1` in the ignored `.env` file; if a request with the first key fails, the app tries `GEMMA_API_KEY_2`. Each model request can take up to two minutes. Live failures are shown as failures and do not substitute football demo records.
+After launch, choose a mode in the sidebar and click its run button. See [Dashboard modes](#dashboard-modes-what-the-demo-proves) for the inputs, fallback behavior, and what each run verifies.
 
 ## Quickstart: CLI Agent Skill
 

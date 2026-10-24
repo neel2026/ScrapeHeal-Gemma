@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import hashlib
 import sys
+import time
 from html import escape
 from pathlib import Path
 
@@ -104,6 +105,41 @@ st.markdown(
         padding: 0.15rem 0.4rem;
         border-radius: 6px;
         font-weight: 600;
+    }
+
+    .demo-timeline {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.7rem;
+        margin: 1rem 0 1.15rem;
+    }
+    .demo-step {
+        min-height: 112px;
+        padding: 0.9rem;
+        border: 1px solid #29415f;
+        border-radius: 13px;
+        background: linear-gradient(145deg, #111d30, #0c1423);
+    }
+    .demo-step.failed { border-color: #873a4b; }
+    .demo-step.repaired { border-color: #796232; }
+    .demo-step.verified { border-color: #22795f; }
+    .demo-step-label {
+        color: #91a9c9;
+        font-size: 0.7rem;
+        font-weight: 800;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+    }
+    .demo-step strong {
+        display: block;
+        margin: 0.38rem 0 0.28rem;
+        color: #f3f7ff;
+        font-size: 0.94rem;
+    }
+    .demo-step p { margin: 0; color: #a1b4d3; font-size: 0.8rem; line-height: 1.4; }
+    @media (max-width: 760px) {
+        .demo-timeline { grid-template-columns: 1fr; }
+        .demo-step { min-height: auto; }
     }
 
     /* Universal Button Fixes - High Contrast, No White-on-White */
@@ -429,6 +465,7 @@ with col_right:
     )
     run_pipeline = st.button(button_label, type="primary", width="stretch")
     if run_pipeline:
+        demo_status = None
         st.session_state.pop("legacy_result", None)
         st.session_state.pop("heal_result", None)
         st.session_state.pop("run_error", None)
@@ -446,6 +483,17 @@ with col_right:
             st.session_state["legacy_result"] = legacy
             if legacy["matched_count"] != 0:
                 raise ValueError("The legacy selector unexpectedly matched this page; change it to a selector that no longer matches.")
+
+            if demo_mode:
+                demo_status = st.status("Football demo · selector failure detected", expanded=True)
+                demo_status.write(f"**Legacy selector failed:** `{broken_selector}` matched 0 rows.")
+                time.sleep(0.7)
+                if api_keys:
+                    demo_status.update(label="Football demo · Gemma 4 is repairing the selector", state="running")
+                    demo_status.write("Sending the fixture screenshot and DOM to Gemma 4 for a replacement selector.")
+                else:
+                    demo_status.update(label="Football demo · applying verified offline repair", state="running")
+                    demo_status.write("No API key is configured; the local football repair keeps this walkthrough runnable.")
 
             hint = None
             if preset:
@@ -471,8 +519,31 @@ with col_right:
                     offline_mock=demo_mode and not bool(api_keys),
                     preset_hint=hint,
                 )
+            if demo_status:
+                verification = result["verification"]
+                row_count = verification["matched_row_count"]
+                if result.get("offline_mock"):
+                    repair_message = "Offline preset repair used; Gemma was not called."
+                elif result.get("offline_fallback"):
+                    repair_message = "Gemma did not return a verified proposal; the checked football preset kept the demo moving."
+                else:
+                    repair_message = "Gemma proposed the repaired selector from the screenshot and DOM."
+                demo_status.write(repair_message)
+                if verification["verified"]:
+                    demo_status.write(f"**BeautifulSoup verified {row_count} rows** and extracted their fields from the fixture DOM.")
+                else:
+                    demo_status.write(f"Local selector verification failed: {verification['error']}")
+                time.sleep(0.7)
+                demo_status.update(
+                    label=(f"Football demo · {row_count} records verified" if verification["verified"] else "Football demo · verification needs attention"),
+                    state=("complete" if verification["verified"] else "error"),
+                    expanded=False,
+                )
             st.session_state["heal_result"] = result
         except Exception as exc:
+            if demo_status:
+                demo_status.update(label="Football demo · pipeline stopped", state="error", expanded=True)
+                demo_status.write(str(exc))
             st.session_state["run_error"] = str(exc)
 
     legacy_result = st.session_state.get("legacy_result")
@@ -491,6 +562,42 @@ with col_right:
     result = st.session_state.get("heal_result")
     if result:
         ver = result["verification"]
+        if demo_mode:
+            if result.get("offline_mock"):
+                repair_title = "Offline repair keeps this demo runnable"
+                repair_detail = "Gemma was not called; the built-in football selectors were used."
+            elif result.get("offline_fallback"):
+                repair_title = "Verified local repair used as fallback"
+                repair_detail = "Gemma could not provide a selector that passed verification."
+            else:
+                repair_title = "Gemma 4 proposed the repaired selector"
+                repair_detail = f"{result['model']} analyzed the screenshot and DOM in {result['latency_seconds']:.1f}s."
+            verification_detail = (
+                f"BeautifulSoup confirmed {ver['matched_row_count']} rows and extracted {len(result['healed_field_selectors'])} fields."
+                if ver["verified"] else f"Verification did not pass: {ver['error']}"
+            )
+            st.markdown(
+                f"""
+                <div class="demo-timeline">
+                  <div class="demo-step failed">
+                    <span class="demo-step-label">01 · Broken selector</span>
+                    <strong>0 rows matched</strong>
+                    <p>The old football standings selector no longer fits this page layout.</p>
+                  </div>
+                  <div class="demo-step repaired">
+                    <span class="demo-step-label">02 · Gemma 4 repair</span>
+                    <strong>{escape(repair_title)}</strong>
+                    <p>{escape(repair_detail)}</p>
+                  </div>
+                  <div class="demo-step verified">
+                    <span class="demo-step-label">03 · Verified football records</span>
+                    <strong>{ver['matched_row_count'] if ver['verified'] else 0} football rows</strong>
+                    <p>{escape(verification_detail)}</p>
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
         if demo_mode and result.get("offline_mock"):
             st.info("Deterministic local demo: no API keys are configured, so this run did not call Gemma.")
         elif demo_mode and result.get("offline_fallback"):
