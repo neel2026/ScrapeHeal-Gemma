@@ -23,18 +23,306 @@ st.set_page_config(page_title="ScrapeHeal-Gemma", page_icon="🩹", layout="wide
 st.markdown(
     """
     <style>
-    .stApp { background: radial-gradient(ellipse at 12% 0%, #1b2945 0, #0b1020 43%, #080d18 100%); color: #edf3ff; }
-    [data-testid="stHeader"] { background: transparent; }
-    .hero { padding: 1.1rem 1.4rem; margin-bottom: 1rem; border: 1px solid #2a3954; border-radius: 18px; background: linear-gradient(105deg,#151f33,#10192b 58%,#122c32); }
-    .eyebrow { color:#62e2c1; letter-spacing:.14em; font-size:.72rem; font-weight:800; }
-    .hero h1 { margin:.15rem 0 .25rem; font-size:2.25rem; color:#f5f7ff; }
-    .hero p { color:#9cacc8; margin:.1rem 0 .7rem; }
-    .badge { display:inline-block; padding:.32rem .6rem; border:1px solid #344660; border-radius:999px; color:#bfd1e9; font-size:.75rem; margin:.15rem .28rem .1rem 0; background:#18243a; }
-    .green { color:#5ce0b6 !important; border-color:#22795f !important; background:#102c28 !important; }
-    .redtrace { border:1px solid #873a4b; background:#2a1521; color:#ffb2bc; padding:.85rem 1rem; border-radius:12px; font-family:monospace; }
-    .pane { border:1px solid #27364f; background:#111a2b; padding:1rem; border-radius:15px; }
-    .stButton button { border-radius:10px; font-weight:700; }
-    div[data-testid="stMetric"] { background:#111a2b; border:1px solid #283850; padding:.7rem; border-radius:12px; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .stApp {
+        background: radial-gradient(ellipse at 15% 0%, #15223a 0%, #090e1c 45%, #050811 100%) !important;
+        color: #edf3ff;
+    }
+
+    [data-testid="stHeader"] {
+        background: transparent !important;
+    }
+
+    /* Hero header */
+    .hero {
+        padding: 1.25rem 1.6rem;
+        margin-bottom: 1.25rem;
+        border: 1px solid #223554;
+        border-radius: 16px;
+        background: linear-gradient(108deg, #131d31 0%, #0e1627 55%, #10252b 100%);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+    }
+    .eyebrow {
+        color: #5eead4;
+        letter-spacing: 0.15em;
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+    .hero h1 {
+        margin: 0.2rem 0 0.35rem;
+        font-size: 2.15rem;
+        font-weight: 800;
+        color: #ffffff;
+        letter-spacing: -0.02em;
+    }
+    .hero p {
+        color: #a1b4d3;
+        margin: 0.1rem 0 0.8rem;
+        font-size: 0.95rem;
+        line-height: 1.45;
+    }
+    .badge {
+        display: inline-block;
+        padding: 0.32rem 0.65rem;
+        border: 1px solid #2d4263;
+        border-radius: 999px;
+        color: #c4d7f2;
+        font-size: 0.76rem;
+        font-weight: 500;
+        margin: 0.2rem 0.35rem 0.1rem 0;
+        background: #142035;
+    }
+    .badge.green {
+        color: #5eead4 !important;
+        border-color: #176b54 !important;
+        background: rgba(14, 52, 42, 0.85) !important;
+        font-weight: 600;
+    }
+
+    /* Error trace container */
+    .redtrace {
+        border: 1px solid #9e2a3f;
+        background: linear-gradient(135deg, #2b111a 0%, #1c0c13 100%);
+        color: #ffb8c4;
+        padding: 0.95rem 1.15rem;
+        border-radius: 12px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.88rem;
+        line-height: 1.45;
+        margin: 0.6rem 0;
+        box-shadow: 0 4px 16px rgba(158, 42, 63, 0.2);
+    }
+    .redtrace code {
+        background: #471523 !important;
+        color: #ffccd5 !important;
+        padding: 0.15rem 0.4rem;
+        border-radius: 6px;
+        font-weight: 600;
+    }
+
+    /* Universal Button Fixes - High Contrast, No White-on-White */
+    .stButton {
+        margin: 0.3rem 0;
+    }
+    .stButton > button {
+        border-radius: 11px !important;
+        font-weight: 700 !important;
+        font-size: 0.95rem !important;
+        letter-spacing: 0.01em !important;
+        padding: 0.65rem 1.25rem !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+
+    /* Step 1 / Secondary Button: Slate-navy with crisp white text */
+    .stButton > button[kind="secondary"],
+    .stButton > button[data-testid="baseButton-secondary"],
+    .stButton > button:not([kind="primary"]) {
+        background: linear-gradient(135deg, #1b2940 0%, #121c2e 100%) !important;
+        color: #ffffff !important;
+        border: 1px solid #334e77 !important;
+        box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3) !important;
+    }
+    .stButton > button[kind="secondary"] *,
+    .stButton > button[data-testid="baseButton-secondary"] *,
+    .stButton > button:not([kind="primary"]) * {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
+    .stButton > button[kind="secondary"]:hover,
+    .stButton > button[data-testid="baseButton-secondary"]:hover,
+    .stButton > button:not([kind="primary"]):hover {
+        background: linear-gradient(135deg, #253957 0%, #19273f 100%) !important;
+        border-color: #5885c4 !important;
+        color: #ffffff !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(45, 85, 155, 0.35) !important;
+    }
+    .stButton > button[kind="secondary"]:active,
+    .stButton > button[data-testid="baseButton-secondary"]:active {
+        transform: translateY(0) !important;
+    }
+
+    /* Step 2 / Primary Action Button: Glowing energetic coral */
+    .stButton > button[kind="primary"],
+    .stButton > button[data-testid="baseButton-primary"] {
+        background: linear-gradient(135deg, #ff4d64 0%, #d81f38 100%) !important;
+        color: #ffffff !important;
+        border: 1px solid #ff7a8b !important;
+        box-shadow: 0 4px 20px rgba(220, 31, 56, 0.42) !important;
+    }
+    .stButton > button[kind="primary"] *,
+    .stButton > button[data-testid="baseButton-primary"] * {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
+    .stButton > button[kind="primary"]:hover,
+    .stButton > button[data-testid="baseButton-primary"]:hover {
+        background: linear-gradient(135deg, #ff6378 0%, #eb2b46 100%) !important;
+        border-color: #ffa0ad !important;
+        color: #ffffff !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 26px rgba(235, 43, 70, 0.6) !important;
+    }
+
+    /* Download button */
+    div[data-testid="stDownloadButton"] > button {
+        background: #112035 !important;
+        color: #5eead4 !important;
+        border: 1px solid #1c4b57 !important;
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+        transition: all 0.2s ease !important;
+    }
+    div[data-testid="stDownloadButton"] > button:hover {
+        background: #172c47 !important;
+        border-color: #5eead4 !important;
+        color: #ffffff !important;
+        transform: translateY(-1px) !important;
+    }
+
+    /* Metrics card polish */
+    div[data-testid="stMetric"] {
+        background: linear-gradient(135deg, #111a2c 0%, #0c1424 100%) !important;
+        border: 1px solid #23344d !important;
+        padding: 0.85rem 1rem !important;
+        border-radius: 14px !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+    }
+    div[data-testid="stMetricLabel"] {
+        color: #8fa5c5 !important;
+        font-size: 0.76rem !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.08em !important;
+    }
+    div[data-testid="stMetricValue"] {
+        color: #f8fafc !important;
+        font-size: 1.12rem !important;
+        font-weight: 700 !important;
+        font-family: 'JetBrains Mono', monospace !important;
+        white-space: normal !important;
+        word-break: break-all !important;
+        overflow: visible !important;
+    }
+
+    /* Code block styling - deep dark mode, no white boxes */
+    div[data-testid="stCodeBlock"] {
+        background: #090f1c !important;
+        border: 1px solid #1d2c42 !important;
+        border-radius: 12px !important;
+        box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+    }
+    div[data-testid="stCodeBlock"] pre {
+        background: #090f1c !important;
+        padding: 0.85rem 1rem !important;
+    }
+    div[data-testid="stCodeBlock"] code {
+        background: transparent !important;
+        color: #7ee8fa !important;
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 0.88rem !important;
+    }
+
+    /* Native Inputs & Textareas */
+    div[data-baseweb="input"] {
+        background-color: #0d1525 !important;
+        border: 1px solid #22344f !important;
+        border-radius: 10px !important;
+    }
+    div[data-baseweb="input"]:focus-within {
+        border-color: #00d2aa !important;
+        box-shadow: 0 0 0 2px rgba(0, 210, 170, 0.22) !important;
+    }
+    div[data-baseweb="input"] input {
+        color: #f1f5f9 !important;
+        background-color: transparent !important;
+        font-size: 0.92rem !important;
+    }
+    div[data-baseweb="select"] > div {
+        background-color: #0d1525 !important;
+        border: 1px solid #22344f !important;
+        border-radius: 10px !important;
+        color: #f1f5f9 !important;
+    }
+    div[data-baseweb="select"] span {
+        color: #f1f5f9 !important;
+    }
+    textarea.stTextArea, div[data-baseweb="textarea"] textarea {
+        background-color: #0d1525 !important;
+        color: #f1f5f9 !important;
+        border: 1px solid #22344f !important;
+        border-radius: 10px !important;
+        font-family: 'JetBrains Mono', monospace !important;
+    }
+
+    /* Sidebar polish */
+    section[data-testid="stSidebar"] {
+        background-color: #080d19 !important;
+        border-right: 1px solid #18253b !important;
+    }
+    section[data-testid="stSidebar"] h2 {
+        color: #ffffff !important;
+        font-size: 1.25rem !important;
+        font-weight: 700 !important;
+    }
+    section[data-testid="stSidebar"] label {
+        color: #9cb1ce !important;
+        font-size: 0.85rem !important;
+        font-weight: 600 !important;
+    }
+
+    /* Tabs refinement */
+    div[data-baseweb="tab-list"] {
+        gap: 6px !important;
+        background: #0b1220 !important;
+        padding: 5px !important;
+        border-radius: 12px !important;
+        border: 1px solid #1d2d46 !important;
+    }
+    button[data-baseweb="tab"] {
+        border-radius: 8px !important;
+        padding: 8px 16px !important;
+        color: #8ea3c4 !important;
+        font-weight: 600 !important;
+        font-size: 0.88rem !important;
+        border: none !important;
+        transition: all 0.15s ease !important;
+    }
+    button[data-baseweb="tab"]:hover {
+        background: #142136 !important;
+        color: #ffffff !important;
+    }
+    button[data-baseweb="tab"][aria-selected="true"] {
+        background: #1b2c47 !important;
+        color: #5eead4 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important;
+    }
+    div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {
+        display: none !important;
+    }
+
+    /* Expander card */
+    div[data-testid="stExpander"] {
+        background: #0c1424 !important;
+        border: 1px solid #1e2e48 !important;
+        border-radius: 12px !important;
+    }
+    div[data-testid="stExpander"] summary {
+        color: #a3b8d6 !important;
+        font-weight: 600 !important;
+    }
+
+    /* Headings contrast */
+    h1, h2, h3, h4 {
+        color: #f5f8ff !important;
+        font-weight: 700 !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -156,6 +444,37 @@ with col_right:
 
             legacy = verify_broken_selector(html_dom, broken_selector)
             st.session_state["legacy_result"] = legacy
+            if legacy["matched_count"] != 0:
+                raise ValueError("The legacy selector unexpectedly matched this page; change it to a selector that no longer matches.")
+
+            hint = None
+            if preset:
+                hint = {
+                    "row_selector": preset.row_selector,
+                    "field_selectors": preset.field_selectors,
+                    "records": preset.records,
+                    "xpath": preset.xpath,
+                }
+            progress_message = (
+                "Running the deterministic football repair…"
+                if demo_mode and not api_keys
+                else "Gemma 4 is comparing the screenshot and DOM. This can take up to two minutes per request; BeautifulSoup will verify the result…"
+            )
+            with st.spinner(progress_message):
+                result = heal_scraper_with_gemma4(
+                    html_dom,
+                    screenshot,
+                    broken_selector,
+                    goal,
+                    model_id=model_id,
+                    thinking_level=thinking_level,
+                    offline_mock=demo_mode and not bool(api_keys),
+                    preset_hint=hint,
+                )
+            st.session_state["heal_result"] = result
+        except Exception as exc:
+            st.session_state["run_error"] = str(exc)
+
     legacy_result = st.session_state.get("legacy_result")
     if legacy_result:
         if legacy_result["matched_count"] == 0:
@@ -181,6 +500,7 @@ with col_right:
         elif result.get("api_key_failovers"):
             st.info("The first Gemma API key failed; the request succeeded with the second key.")
         if ver["verified"]:
+            label = "Verified on Books to Scrape HTML" if not demo_mode else "Verified on football demo HTML"
             st.markdown(
                 f"<span class='badge green'>✅ {label}: {ver['matched_row_count']} rows extracted deterministically</span>",
                 unsafe_allow_html=True,
@@ -191,6 +511,12 @@ with col_right:
         m1.metric("Latency", f"{result['latency_seconds']:.2f}s")
         m2.metric("Model", result["model"])
         m3.metric("Thinking", result["thinking_level"])
+        if result.get("offline_mock"):
+            origin = "Deterministic local demo"
+        elif result.get("offline_fallback"):
+            origin = "Verified football preset fallback"
+        else:
+            origin = "Gemma 4 live inference"
         st.caption(f"{origin} · {result['attempts']} selector attempt(s)" + (" · Cached result" if result.get("cached") else ""))
         diff_left, diff_right = st.columns(2)
         with diff_left:
@@ -228,41 +554,3 @@ with col_right:
             st.code("python scrape-heal/scripts/heal_scraper.py --preset football_league --offline-mock", language="bash")
             st.markdown("**Pipeline**")
             st.markdown("```mermaid\n" + result.get("mermaid_diagram", "") + "\n```")
-            if legacy["matched_count"] != 0:
-                raise ValueError("The legacy selector unexpectedly matched this page; change it to a selector that no longer matches.")
-
-            hint = None
-            if preset:
-                hint = {
-                    "row_selector": preset.row_selector,
-                    "field_selectors": preset.field_selectors,
-                    "records": preset.records,
-                    "xpath": preset.xpath,
-                }
-            progress_message = (
-                "Running the deterministic football repair…"
-                if demo_mode and not api_keys
-                else "Gemma 4 is comparing the screenshot and DOM. This can take up to two minutes per request; BeautifulSoup will verify the result…"
-            )
-            with st.spinner(progress_message):
-                result = heal_scraper_with_gemma4(
-                    html_dom,
-                    screenshot,
-                    broken_selector,
-                    goal,
-                    model_id=model_id,
-                    thinking_level=thinking_level,
-                    offline_mock=demo_mode and not bool(api_keys),
-                    preset_hint=hint,
-                )
-            st.session_state["heal_result"] = result
-        except Exception as exc:
-            st.session_state["run_error"] = str(exc)
-
-            label = "Verified on Books to Scrape HTML" if not demo_mode else "Verified on football demo HTML"
-        if result.get("offline_mock"):
-            origin = "Deterministic local demo"
-        elif result.get("offline_fallback"):
-            origin = "Verified football preset fallback"
-        else:
-            origin = "Gemma 4 live inference"
