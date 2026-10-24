@@ -185,9 +185,16 @@ def heal_scraper_with_gemma4(
     image.save(image_buffer, format="PNG")
     image_bytes = image_buffer.getvalue()
     cleaned_dom = clean_html_dom(html_dom)
-    key_hash = hashlib.sha256((api_key or "").encode("utf-8")).hexdigest()[:10]
+    resolved_key = api_key or os.getenv("GEMINI_API_KEY")
+    if offline_mock and resolved_key:
+        raise ValueError("--offline-mock is reserved for runs without GEMINI_API_KEY.")
+    if not offline_mock and not resolved_key and client is None:
+        raise ValueError("Set GEMINI_API_KEY or use --offline-mock with a built-in preset.")
+    key_hash = hashlib.sha256((resolved_key or "").encode("utf-8")).hexdigest()
     cache_key = hashlib.sha256(
-        image_bytes + cleaned_dom.encode("utf-8") + f"{broken_selector}|{goal}|{model_id}|{thinking_level}|{key_hash}".encode()
+        image_bytes + html_dom.encode("utf-8")
+        + json.dumps([broken_selector, goal, model_id, thinking_level, key_hash, offline_mock,
+                      (mock_result or preset_hint) if offline_mock else None], sort_keys=True).encode()
     ).hexdigest()
     if cache_key in _RESPONSE_CACHE:
         cached = dict(_RESPONSE_CACHE[cache_key])
@@ -200,13 +207,8 @@ def heal_scraper_with_gemma4(
     offline_fallback = False
     attempts = 1
     if offline_mock:
-        if api_key or os.getenv("GEMINI_API_KEY"):
-            raise ValueError("--offline-mock is reserved for runs without GEMINI_API_KEY.")
         analysis = _mock_result(mock_result, preset_hint)
     else:
-        resolved_key = api_key or os.getenv("GEMINI_API_KEY")
-        if not resolved_key and not (client is not None):
-            raise ValueError("Set GEMINI_API_KEY or use --offline-mock with a built-in preset.")
         active_client = client or genai.Client(api_key=resolved_key)
         image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/png")
 
@@ -279,7 +281,8 @@ def heal_scraper_with_gemma4(
     }
     if len(_RESPONSE_CACHE) > 32:
         _RESPONSE_CACHE.clear()
-    _RESPONSE_CACHE[cache_key] = dict(result)
+    if not offline_fallback and verification["verified"]:
+        _RESPONSE_CACHE[cache_key] = dict(result)
     return result
 
 

@@ -173,6 +173,34 @@ class EngineRegressionTests(unittest.TestCase):
         self.assertTrue(result["verified_on_dom"])
         self.assertEqual(result["verification"]["deterministic_records"], [{"name": "A"}, {"name": "B"}])
 
+    def test_mock_cache_does_not_replace_live_inference(self):
+        html = '<article class="item"><b>A</b></article>'
+        with mock.patch.dict("os.environ", {"GEMINI_API_KEY": ""}):
+            heal_scraper_with_gemma4(html, self.image, ".old", "names", offline_mock=True, mock_result=self.proposal())
+            client = self.client_for(self.proposal())
+            result = heal_scraper_with_gemma4(html, self.image, ".old", "names", client=client)
+        self.assertFalse(result["offline_mock"])
+        self.assertEqual(client.models.generate_content.call_count, 1)
+
+    def test_temporary_failure_can_recover_on_next_live_attempt(self):
+        html = '<article class="item"><b>A</b></article>'
+        client = self.client_for(ConnectionError("temporary outage"), self.proposal())
+        hint = {"row_selector": ".item", "field_selectors": {"name": "b"}}
+        first = heal_scraper_with_gemma4(html, self.image, ".old", "names", client=client, preset_hint=hint)
+        second = heal_scraper_with_gemma4(html, self.image, ".old", "names", client=client, preset_hint=hint)
+        self.assertTrue(first["offline_fallback"])
+        self.assertFalse(second["offline_fallback"])
+        self.assertEqual(client.models.generate_content.call_count, 2)
+
+    def test_cache_distinguishes_changes_beyond_prompt_cutoff(self):
+        prefix = "<p>" + "x" * 16000 + "</p>"
+        client = self.client_for(self.proposal(), self.proposal())
+        for name in ("A", "B"):
+            html = prefix + f'<article class="item"><b>{name}</b></article>'
+            result = heal_scraper_with_gemma4(html, self.image, ".old", "names", client=client)
+            self.assertEqual(result["verification"]["deterministic_records"], [{"name": name}])
+        self.assertEqual(client.models.generate_content.call_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
