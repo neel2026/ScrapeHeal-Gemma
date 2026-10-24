@@ -2,7 +2,7 @@
 name: scrape-heal
 description: Visually inspects webpages using open-weight Gemma 4 multimodal vision (gemma-4-26b-a4b-it / gemma-4-31b-it) alongside HTML DOM to diagnose broken CSS or XPath selectors, self-heal web scrapers with live BeautifulSoup verification, and extract structured JSON. Use when building scrapers, fixing broken selectors, or extracting data from mutated layouts.
 license: Apache-2.0
-compatibility: Requires Python 3.10+, google-genai, beautifulsoup4, pillow, requests, and a GEMINI_API_KEY from Google AI Studio.
+compatibility: Requires Python 3.10+, google-genai, beautifulsoup4, pillow, requests, and GEMMA_API_KEY_1 from Google AI Studio.
 metadata:
   author: ScrapeHeal-Gemma contributors
   version: "1.0.0"
@@ -20,7 +20,7 @@ ScrapeHeal-Gemma sends a webpage screenshot and a cleaned HTML DOM to an allowed
 
 ## Run the CLI
 
-Run commands from the repository root. Install dependencies with `python -m pip install -r requirements.txt`. Set `GEMINI_API_KEY` in `.env` or the process environment for live inference.
+Run commands from the repository root. Install dependencies with `python -m pip install -r requirements.txt`. Set `GEMMA_API_KEY_1` and optionally `GEMMA_API_KEY_2` in `.env` for live inference. If a request using the first key fails, the CLI tries the second.
 
 Built-in deterministic demo:
 
@@ -37,7 +37,7 @@ python scrape-heal/scripts/heal_scraper.py --url https://example.com/catalog --s
 python scrape-heal/scripts/heal_scraper.py --html-file page.html --screenshot page.png --broken-selector 'ul.products li' --goal 'Extract product name and stock' --output healed.json
 ```
 
-Arguments: `--preset`, `--url`, `--html-file`, `--screenshot`, `--broken-selector`, `--goal`, `--model`, `--thinking-level`, `--output`, and `--offline-mock`. `--url` and `--html-file` require `--screenshot`; screenshots are not fabricated for custom webpages. `--offline-mock` is for CI/demo runs without `GEMINI_API_KEY` and only supports a built-in preset or an explicit mock result in Python.
+Arguments: `--preset`, `--url`, `--html-file`, `--screenshot`, `--broken-selector`, `--goal`, `--model`, `--thinking-level`, `--output`, and `--offline-mock`. `--url` and `--html-file` require `--screenshot`; screenshots are not fabricated for custom webpages. `--offline-mock` is for CI/demo runs without `GEMMA_API_KEY_1` or `GEMMA_API_KEY_2` and only supports a built-in preset or an explicit mock result in Python.
 
 ## Agent workflow
 

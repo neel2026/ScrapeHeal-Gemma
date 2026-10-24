@@ -56,7 +56,7 @@ The foundational model for this project is confirmed: **Google Gemma 4**. This c
 1. **Request Throttling**: Maintain a conservative buffer below 30 RPM (e.g., max 20–25 RPM in practice).
 2. **Input Budgeting**: Ensure input prompt payloads are kept lightweight to prevent breaching the 16,000 input tokens/minute cap.
 3. **Caching**: Cache responses for repetitive user or system queries to minimize redundant API calls.
-4. **Multi-Account API Key Rotation**: Support automatic failover between primary (`GEMINI_API_KEY_1`) and backup (`GEMINI_API_KEY_2`) keys to maximize quota resilience across two Google AI Studio accounts.
+4. **Multi-Account API Key Rotation**: Support automatic failover between primary (`GEMMA_API_KEY_1`) and backup (`GEMMA_API_KEY_2`) keys to maximize quota resilience across two Google AI Studio accounts.
 5. **Offline Demo Fallback**: Implement a robust mock mode (`MOCK_GEMMA=true` in [`.env`](file:///d:/events/Hacktoberfest%202026/.env)) that delivers predictable, realistic responses during the live demo, immune to event Wi-Fi drops or quota limits.
 6. **Minimal Client Helper**: Provided in [`gemma_client.py`](file:///d:/events/Hacktoberfest%202026/gemma_client.py) with zero external dependencies, handling key rotation and mock fallback cleanly.
 

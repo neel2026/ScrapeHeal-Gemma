@@ -19,7 +19,7 @@ The dashboard provides a visual judge demo and an offline preset mode. The CLI r
 
 ## Open-Weight AI Model & License Compliance
 
-- **Models used:** Google Gemma 4 `gemma-4-26b-a4b-it` and `gemma-4-31b-it`, called through the official `google-genai` Python SDK and Google AI Studio / Gemini API.
+- **Models used:** Google Gemma 4 `gemma-4-26b-a4b-it` and `gemma-4-31b-it`, called through the official `google-genai` Python SDK and Google AI Studio API.
 - **Model license:** Apache License 2.0 ([license text](https://www.apache.org/licenses/LICENSE-2.0)); see Google's [Gemma 4 model card](https://ai.google.dev/gemma/docs/core/model_card_4) and [Gemma license information](https://ai.google.dev/gemma/apache_2).
 - **Google Gemma terms:** [Gemma Terms of Use](https://ai.google.dev/gemma/terms).
 - **Agent Skill Specification:** The `scrape-heal/SKILL.md` follows [agentskills.io/specification](https://agentskills.io/specification).
@@ -33,11 +33,11 @@ python3.10 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 cp .env.example .env
-# Add your Google AI Studio key as GEMINI_API_KEY in .env for live inference.
+# Add keys as GEMMA_API_KEY_1 and GEMMA_API_KEY_2 in .env for live inference.
 streamlit run app.py
 ```
 
-Choose one of the three built-in scenarios and press the two pipeline buttons in order. With no API key, presets use deterministic offline responses and still run BeautifulSoup verification. For a custom page, provide its HTML or URL, a matching screenshot, the old selector, and an extraction goal; custom live inference needs `GEMINI_API_KEY`.
+Choose one of the three built-in scenarios and press the two pipeline buttons in order. With no API key, presets use deterministic offline responses and still run BeautifulSoup verification. For a custom page, provide its HTML or URL, a matching screenshot, the old selector, and an extraction goal. The app reads `GEMMA_API_KEY_1` and `GEMMA_API_KEY_2` from `.env`; if a request with the first key fails, it tries the second. The Streamlit UI does not request keys.
 
 ## Quickstart: CLI Agent Skill
 
@@ -52,7 +52,7 @@ python scrape-heal/scripts/heal_scraper.py \
 Live custom page example:
 
 ```bash
-export GEMINI_API_KEY="your-key"
+# Configure GEMMA_API_KEY_1 (and optionally GEMMA_API_KEY_2) in .env.
 python scrape-heal/scripts/heal_scraper.py \
   --html-file page.html \
   --screenshot page.png \

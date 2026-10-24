@@ -30,6 +30,16 @@ _DAILY_REQUEST_DATE = None
 _DAILY_REQUEST_COUNT = 0
 
 
+def configured_api_keys() -> list[str]:
+    """Read numbered Gemma API keys from .env, in failover order."""
+    numbered = []
+    for name, value in os.environ.items():
+        match = re.fullmatch(r"GEMMA_API_KEY_(\d+)", name)
+        if match and value.strip():
+            numbered.append((int(match.group(1)), value.strip()))
+    return [value for _, value in sorted(numbered)]
+
+
 def _reserve_api_request(estimated_input_tokens: int) -> None:
     """Keep a small buffer below the configured per-minute and daily quotas."""
     global _DAILY_REQUEST_DATE, _DAILY_REQUEST_COUNT
@@ -203,15 +213,17 @@ def heal_scraper_with_gemma4(
     image.save(image_buffer, format="PNG")
     image_bytes = image_buffer.getvalue()
     cleaned_dom = clean_html_dom(html_dom)
-    resolved_key = api_key or os.getenv("GEMINI_API_KEY")
-    if offline_mock and resolved_key:
-        raise ValueError("--offline-mock is reserved for runs without GEMINI_API_KEY.")
-    if not offline_mock and not resolved_key and client is None:
-        raise ValueError("Set GEMINI_API_KEY or use --offline-mock with a built-in preset.")
-    key_hash = hashlib.sha256((resolved_key or "").encode("utf-8")).hexdigest()
+    api_keys = [api_key] if api_key else (configured_api_keys() if client is None else [])
+    if offline_mock and api_keys:
+        raise ValueError("--offline-mock is reserved for runs without GEMMA_API_KEY_N entries in .env.")
+    if not offline_mock and not api_keys and client is None:
+        raise ValueError("Set GEMMA_API_KEY_1 (and optionally GEMMA_API_KEY_2) in .env, or use --offline-mock with a built-in preset.")
+    key_fingerprint = hashlib.sha256(json.dumps([
+        hashlib.sha256(value.encode("utf-8")).hexdigest() for value in api_keys
+    ]).encode("utf-8")).hexdigest()
     cache_key = hashlib.sha256(
         image_bytes + html_dom.encode("utf-8")
-        + json.dumps([broken_selector, goal, model_id, thinking_level, key_hash, offline_mock,
+        + json.dumps([broken_selector, goal, model_id, thinking_level, key_fingerprint, offline_mock,
                       (mock_result or preset_hint) if offline_mock else None], sort_keys=True).encode()
     ).hexdigest()
     if cache_key in _RESPONSE_CACHE:
@@ -227,27 +239,46 @@ def heal_scraper_with_gemma4(
     if offline_mock:
         analysis = _mock_result(mock_result, preset_hint)
     else:
-        active_client = client or genai.Client(
-            api_key=resolved_key, http_options=types.HttpOptions(timeout=45000)
-        )
+        active_client = client
+        active_key_index = 0
+        api_key_failovers = 0
         image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/png")
 
         def call_model(error: Optional[str] = None) -> Dict[str, Any]:
+            nonlocal active_client, active_key_index, api_key_failovers
             prompt = _prompt(cleaned_dom, broken_selector, goal, error)
             image_token_estimate = max(258, ((image.width + 767) // 768) * ((image.height + 767) // 768) * 258)
             text_token_estimate = (len(prompt) + 3) // 4
-            _reserve_api_request(text_token_estimate + image_token_estimate)
             config = types.GenerateContentConfig(
                 thinking_config=types.ThinkingConfig(thinking_level=thinking_level),
                 temperature=0.1,
                 response_mime_type="application/json",
             )
-            response = active_client.models.generate_content(
-                model=model_id,
-                contents=[image_part, prompt],
-                config=config,
-            )
-            return _parse_response(response.text or "")
+            if client is not None:
+                _reserve_api_request(text_token_estimate + image_token_estimate)
+                response = client.models.generate_content(
+                    model=model_id, contents=[image_part, prompt], config=config,
+                )
+                return _parse_response(response.text or "")
+            for key_index in range(active_key_index, len(api_keys)):
+                candidate = genai.Client(
+                    api_key=api_keys[key_index], http_options=types.HttpOptions(timeout=45000)
+                )
+                _reserve_api_request(text_token_estimate + image_token_estimate)
+                try:
+                    response = candidate.models.generate_content(
+                        model=model_id, contents=[image_part, prompt], config=config,
+                    )
+                except Exception:
+                    if key_index + 1 >= len(api_keys):
+                        raise
+                    active_key_index = key_index + 1
+                    api_key_failovers += 1
+                    continue
+                active_client = candidate
+                active_key_index = key_index
+                return _parse_response(response.text or "")
+            raise RuntimeError("No usable GEMMA_API_KEY_N value is configured.")
 
         try:
             analysis = call_model()
@@ -304,6 +335,7 @@ def heal_scraper_with_gemma4(
         "offline_mock": offline_mock,
         "offline_fallback": offline_fallback,
         "fallback_error": fallback_error,
+        "api_key_failovers": api_key_failovers if not offline_mock else 0,
     }
     if len(_RESPONSE_CACHE) > 32:
         _RESPONSE_CACHE.clear()
@@ -351,7 +383,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--model", choices=ALLOWED_MODELS, default=ALLOWED_MODELS[0])
     parser.add_argument("--thinking-level", choices=("high", "minimal"), default="high")
     parser.add_argument("--output", help="Write result JSON to this path.")
-    parser.add_argument("--offline-mock", action="store_true", help="Use deterministic preset results when GEMINI_API_KEY is absent (CI/demo only).")
+    parser.add_argument("--offline-mock", action="store_true", help="Use deterministic preset results when GEMMA_API_KEY_N entries are absent (CI/demo only).")
     args = parser.parse_args(argv)
     try:
         html, image, broken, goal, hint = _load_inputs(args)

@@ -62,7 +62,9 @@ class SmokeTests(unittest.TestCase):
             "records": preset.records,
             "xpath": preset.xpath,
         }
-        with mock.patch.dict("os.environ", {"GEMINI_API_KEY": ""}):
+        with mock.patch.dict("os.environ", {
+            "GEMMA_API_KEY_1": "", "GEMMA_API_KEY_2": "",
+        }):
             result = heal_scraper_with_gemma4(
                 preset.html,
                 preset.image,
@@ -146,7 +148,10 @@ class SmokeTests(unittest.TestCase):
 
 class DashboardRegressionTests(unittest.TestCase):
     def setUp(self):
-        patcher = mock.patch.dict("os.environ", {"GEMINI_API_KEY": ""})
+        patcher = mock.patch.dict("os.environ", {
+            "GEMMA_API_KEY_1": "",
+            "GEMMA_API_KEY_2": "",
+        })
         patcher.start()
         self.addCleanup(patcher.stop)
         engine._RESPONSE_CACHE.clear()
@@ -180,6 +185,10 @@ class DashboardRegressionTests(unittest.TestCase):
             next(x for x in app.button if "Step 1:" in x.label).click().run()
             self.assertEqual(get.call_count, 1)
             self.assertFalse(app.exception)
+
+    def test_api_key_is_read_from_environment_not_streamlit_input(self):
+        app = self.dashboard()
+        self.assertNotIn("Gemma API Key", [widget.label for widget in app.text_input])
 
 
 class EngineRegressionTests(unittest.TestCase):
@@ -218,9 +227,43 @@ class EngineRegressionTests(unittest.TestCase):
         self.assertTrue(result["verified_on_dom"])
         self.assertEqual(result["verification"]["deterministic_records"], [{"name": "A"}, {"name": "B"}])
 
+    def test_numbered_api_keys_are_loaded_from_environment_in_order(self):
+        with mock.patch.dict("os.environ", {
+            "GEMMA_API_KEY_1": "first-test-key",
+            "GEMMA_API_KEY_2": "second-test-key",
+        }):
+            self.assertEqual(engine.configured_api_keys(), ["first-test-key", "second-test-key"])
+        with mock.patch.dict("os.environ", {
+            "GEMMA_API_KEY_1": "",
+            "GEMMA_API_KEY_2": "second-test-key",
+        }):
+            self.assertEqual(engine.configured_api_keys(), ["second-test-key"])
+
+    def test_failed_primary_key_retries_with_backup_key(self):
+        html = '<article class="item"><b>A</b></article>'
+        primary_client = self.client_for(ConnectionError("primary unavailable"))
+        backup_client = self.client_for(self.proposal())
+        with mock.patch.dict("os.environ", {
+            "GEMMA_API_KEY_1": "first-test-key",
+            "GEMMA_API_KEY_2": "second-test-key",
+        }), mock.patch.object(
+            engine.genai, "Client", side_effect=[primary_client, backup_client]
+        ) as create_client:
+            result = heal_scraper_with_gemma4(
+                html, self.image, ".old", "Extract names"
+            )
+
+        self.assertTrue(result["verified_on_dom"])
+        self.assertEqual(result["api_key_failovers"], 1)
+        self.assertEqual(create_client.call_count, 2)
+        self.assertEqual(primary_client.models.generate_content.call_count, 1)
+        self.assertEqual(backup_client.models.generate_content.call_count, 1)
+
     def test_mock_cache_does_not_replace_live_inference(self):
         html = '<article class="item"><b>A</b></article>'
-        with mock.patch.dict("os.environ", {"GEMINI_API_KEY": ""}):
+        with mock.patch.dict("os.environ", {
+            "GEMMA_API_KEY_1": "", "GEMMA_API_KEY_2": "",
+        }):
             heal_scraper_with_gemma4(html, self.image, ".old", "names", offline_mock=True, mock_result=self.proposal())
             client = self.client_for(self.proposal())
             result = heal_scraper_with_gemma4(html, self.image, ".old", "names", client=client)

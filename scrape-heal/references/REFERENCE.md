@@ -58,8 +58,9 @@
 
 ## Troubleshooting
 
-- **`Set GEMINI_API_KEY`**: Add the key to `.env` or export it in the shell that launches the app.
-- **HTTP 429 / quota error**: Wait before retrying. The CLI does not silently switch model families; use a built-in offline preset during a demo interruption.
+- **`Set GEMMA_API_KEY_1`**: Add `GEMMA_API_KEY_1` and optionally `GEMMA_API_KEY_2` to `.env`. The app does not accept keys through its UI.
+- **Request fails with the first key**: The CLI tries `GEMMA_API_KEY_2` once. The per-minute, daily, and token guards still count both requests.
+- **HTTP 429 / quota error**: If the second key also fails, wait before retrying or use a built-in offline preset during a demo interruption.
 - **No rows verified**: Confirm the screenshot and HTML came from the same page state, inspect the cleaned DOM, and look for repeated containers with stable attributes.
 - **Selector syntax error**: Review the proposed CSS with BeautifulSoup/SoupSieve compatibility in mind. The deterministic verifier captures the exact parser error.
 - **Remote page is incomplete**: Some sites need JavaScript or authentication to render the page. Supply an HTML snapshot and screenshot captured from the authenticated browser session.

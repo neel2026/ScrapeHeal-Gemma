@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import hashlib
-import os
 import sys
 from pathlib import Path
 
@@ -15,7 +14,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "scrape-heal"))
 
-from scripts.heal_scraper import ALLOWED_MODELS, heal_scraper_with_gemma4, verify_broken_selector
+from scripts.heal_scraper import ALLOWED_MODELS, configured_api_keys, heal_scraper_with_gemma4, verify_broken_selector
 from scripts.presets import PRESETS, build_preset
 
 
@@ -56,12 +55,8 @@ st.markdown(
 
 with st.sidebar:
     st.markdown("## Demo controls")
-    api_key = st.text_input(
-        "Gemini API Key",
-        value=os.environ.get("GEMINI_API_KEY", ""),
-        type="password",
-        help="Loaded from GEMINI_API_KEY or .env. It is used for this session only.",
-    )
+    api_keys = configured_api_keys()
+    st.caption("Gemma API keys load from .env. Key 2 is tried if a request with key 1 fails.")
     model_id = st.selectbox(
         "Gemma 4 model",
         ALLOWED_MODELS,
@@ -73,7 +68,8 @@ with st.sidebar:
     )
     thinking_level = st.radio("Gemma 4 thinking level", ("high", "minimal"), horizontal=True)
     scenario = st.selectbox("Scenario", [*PRESETS.values(), "Custom Live URL / Screenshot Upload"])
-    st.caption("No API key? Built-in scenarios run in clearly labeled offline demo mode.")
+    if not api_keys:
+        st.caption("No Gemma API key found. Built-in scenarios run in clearly labeled offline demo mode.")
 
 if st.session_state.get("_active_scenario") != scenario:
     st.session_state.pop("legacy_result", None)
@@ -144,7 +140,8 @@ with col_left:
 input_fingerprint = hashlib.sha256(
     html_dom.encode("utf-8")
     + (screenshot.tobytes() if screenshot is not None else b"")
-    + json.dumps([broken_selector, goal, model_id, thinking_level, api_key,
+    + json.dumps([broken_selector, goal, model_id, thinking_level,
+                  [hashlib.sha256(key.encode()).hexdigest() for key in api_keys],
                   screenshot.size if screenshot is not None else None]).encode()
 ).hexdigest()
 if st.session_state.get("_input_fingerprint") != input_fingerprint:
@@ -176,8 +173,8 @@ with col_right:
     if run_heal:
         if not html_dom or screenshot is None or not broken_selector or not goal:
             st.warning("Provide HTML, screenshot, broken selector, and extraction goal.")
-        elif not api_key and preset is None:
-            st.error("Custom pages need GEMINI_API_KEY. Offline demo mode is available for built-in scenarios.")
+        elif not api_keys and preset is None:
+            st.error("Custom pages need GEMMA_API_KEY_1 in .env. Offline demo mode is available for built-in scenarios.")
         else:
             try:
                 hint = None
@@ -196,8 +193,7 @@ with col_right:
                         goal,
                         model_id=model_id,
                         thinking_level=thinking_level,
-                        api_key=api_key or None,
-                        offline_mock=not bool(api_key),
+                        offline_mock=not bool(api_keys),
                         preset_hint=hint,
                     )
                 st.session_state["heal_result"] = result
@@ -208,6 +204,8 @@ with col_right:
     if result:
         ver = result["verification"]
         origin = "Offline demo fallback" if result.get("offline_mock") or result.get("offline_fallback") else "Gemma 4 live inference"
+        if result.get("api_key_failovers"):
+            st.info("The first Gemma API key failed; the request succeeded with the second key.")
         if result.get("fallback_error"):
             st.warning(f"Gemma 4 was temporarily unavailable; showing verified built-in demo data. {result['fallback_error']}")
         if ver["verified"]:
