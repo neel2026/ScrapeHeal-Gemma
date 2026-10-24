@@ -113,23 +113,32 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(client.models.calls, 2)
 
     def test_skill_frontmatter_matches_folder_and_required_metadata(self):
+        import yaml
+
         skill_path = ROOT / "scrape-heal" / "SKILL.md"
         content = skill_path.read_text(encoding="utf-8")
-        frontmatter = content.split("---", 2)[1]
-        description = next(line.removeprefix("description: ") for line in frontmatter.splitlines() if line.startswith("description: "))
-        compatibility = next(line.removeprefix("compatibility: ") for line in frontmatter.splitlines() if line.startswith("compatibility: "))
-
-        self.assertEqual(skill_path.parent.name, "scrape-heal")
-        self.assertRegex("scrape-heal", re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$"))
-        self.assertIn("name: scrape-heal", frontmatter)
-        self.assertIn("license: Apache-2.0", frontmatter)
-        self.assertIn('version: "1.0.0"', frontmatter)
-        self.assertIn("author:", frontmatter)
-        self.assertIn("open_weight_models:", frontmatter)
-        self.assertIn("model_license: Apache-2.0", frontmatter)
-        self.assertLessEqual(len(description), 1024)
-        self.assertLessEqual(len(compatibility), 500)
-        self.assertEqual(ALLOWED_MODELS, ("gemma-4-26b-a4b-it", "gemma-4-31b-it"))
+        self.assertTrue(content.startswith("---\n"))
+        parts = content.split("---", 2)
+        self.assertEqual(len(parts), 3)
+        frontmatter = yaml.safe_load(parts[1])
+        self.assertIsInstance(frontmatter, dict)
+        name = frontmatter["name"]
+        self.assertEqual(name, skill_path.parent.name)
+        self.assertRegex(name, re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$"))
+        self.assertLessEqual(len(name), 64)
+        self.assertTrue(set(frontmatter) <= {"name", "description", "license", "compatibility", "metadata", "allowed-tools"})
+        for field, limit in (("description", 1024), ("compatibility", 500)):
+            self.assertIsInstance(frontmatter[field], str)
+            self.assertTrue(frontmatter[field].strip())
+            self.assertLessEqual(len(frontmatter[field]), limit)
+        self.assertEqual(frontmatter["license"], "Apache-2.0")
+        metadata = frontmatter["metadata"]
+        self.assertIsInstance(metadata, dict)
+        self.assertTrue(all(isinstance(key, str) and isinstance(value, str) for key, value in metadata.items()))
+        self.assertTrue(metadata["author"])
+        self.assertEqual(metadata["version"], "1.0.0")
+        self.assertEqual(metadata["model_license"], "Apache-2.0")
+        self.assertEqual(metadata["open_weight_models"], ", ".join(ALLOWED_MODELS))
         self.assertIn("--preset", content)
         self.assertIn("--offline-mock", content)
         self.assertIn("references/REFERENCE.md", content)
