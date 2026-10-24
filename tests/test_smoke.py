@@ -228,6 +228,17 @@ class EngineRegressionTests(unittest.TestCase):
         self.assertIn(".missing-card", retry_prompt)
         self.assertIn("b.missing-name", retry_prompt)
 
+    def test_api_timeout_is_bounded_and_activates_preset_fallback(self):
+        client = self.client_for(TimeoutError("request timed out"))
+        hint = {"row_selector": ".item", "field_selectors": {"name": "b"}}
+        with mock.patch.object(engine.genai, "Client", return_value=client) as create:
+            result = heal_scraper_with_gemma4('<article class="item"><b>A</b></article>', self.image, ".old", "names", api_key="test-placeholder", preset_hint=hint)
+        self.assertTrue(result["offline_fallback"])
+        self.assertTrue(result["verified_on_dom"])
+        options = create.call_args.kwargs.get("http_options")
+        self.assertIsNotNone(options)
+        self.assertEqual(options.timeout, 45000)
+
 
 if __name__ == "__main__":
     unittest.main()

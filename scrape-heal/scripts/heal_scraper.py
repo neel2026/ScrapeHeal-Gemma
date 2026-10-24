@@ -224,7 +224,9 @@ def heal_scraper_with_gemma4(
     if offline_mock:
         analysis = _mock_result(mock_result, preset_hint)
     else:
-        active_client = client or genai.Client(api_key=resolved_key)
+        active_client = client or genai.Client(
+            api_key=resolved_key, http_options=types.HttpOptions(timeout=45000)
+        )
         image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/png")
 
         def call_model(error: Optional[str] = None) -> Dict[str, Any]:
