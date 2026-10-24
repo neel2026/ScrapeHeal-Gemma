@@ -83,11 +83,9 @@ class SmokeTests(unittest.TestCase):
 
         class Response:
             def __init__(self, selector):
-                self.text = (
-                    '{"healed_row_css_selector": '
-                    + __import__("json").dumps(selector)
-                    + ', "healed_field_selectors": {"club": "[data-field=club]"}, "healed_xpath": "//div"}'
-                )
+                proposal = EngineRegressionTests().proposal(selector)
+                proposal["healed_field_selectors"] = {"club": "[data-field=club]"}
+                self.text = json.dumps(proposal)
 
         class Models:
             def __init__(self):
@@ -200,6 +198,24 @@ class EngineRegressionTests(unittest.TestCase):
             result = heal_scraper_with_gemma4(html, self.image, ".old", "names", client=client)
             self.assertEqual(result["verification"]["deterministic_records"], [{"name": name}])
         self.assertEqual(client.models.generate_content.call_count, 2)
+
+    def test_model_response_requires_complete_typed_schema(self):
+        self.assertEqual(engine._parse_response(json.dumps(self.proposal()))["confidence_score"], 90)
+        invalid = self.proposal()
+        del invalid["visual_analysis"]
+        with self.assertRaises(ValueError):
+            engine._parse_response(json.dumps(invalid))
+        for field, value in (
+            ("confidence_score", "high"), ("confidence_score", None),
+            ("confidence_score", 101), ("confidence_score", True),
+            ("healed_row_css_selector", None), ("healed_field_selectors", {"name": 2}),
+            ("visual_extracted_data", {}), ("patched_python_code", ""),
+        ):
+            with self.subTest(field=field, value=value):
+                invalid = self.proposal()
+                invalid[field] = value
+                with self.assertRaises(ValueError):
+                    engine._parse_response(json.dumps(invalid))
 
 
 if __name__ == "__main__":
