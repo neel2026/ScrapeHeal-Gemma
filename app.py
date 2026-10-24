@@ -124,6 +124,23 @@ else:
     html_dom, screenshot = custom_html, custom_image
     broken_selector, goal = custom_broken_selector, custom_goal
 
+col_left, col_right = st.columns([1.05, 0.95], gap="large")
+with col_left:
+    st.markdown("### 1. Target webpage viewport & mutated DOM")
+    if screenshot is not None:
+        st.image(screenshot, width="stretch", caption="Visual input passed to Gemma 4 Vision")
+    else:
+        st.info("Choose a preset or upload a webpage screenshot to start.")
+    if preset:
+        broken_selector = st.text_input("Legacy CSS selector", value=preset.broken_selector, key=f"selector_{preset.key}")
+        goal = st.text_input("Extraction goal", value=preset.goal, key=f"goal_{preset.key}")
+    if broken_selector:
+        st.markdown(f"**Legacy selector**  \n`{broken_selector}`")
+    if goal:
+        st.markdown(f"**Extraction goal**  \n{goal}")
+    with st.expander("Inspect raw mutated HTML DOM"):
+        st.code(html_dom or "No HTML loaded yet.", language="html")
+
 input_fingerprint = hashlib.sha256(
     html_dom.encode("utf-8")
     + (screenshot.tobytes() if screenshot is not None else b"")
@@ -134,20 +151,6 @@ if st.session_state.get("_input_fingerprint") != input_fingerprint:
     st.session_state.pop("legacy_result", None)
     st.session_state.pop("heal_result", None)
     st.session_state["_input_fingerprint"] = input_fingerprint
-
-col_left, col_right = st.columns([1.05, 0.95], gap="large")
-with col_left:
-    st.markdown("### 1. Target webpage viewport & mutated DOM")
-    if screenshot is not None:
-        st.image(screenshot, width="stretch", caption="Visual input passed to Gemma 4 Vision")
-    else:
-        st.info("Choose a preset or upload a webpage screenshot to start.")
-    if broken_selector:
-        st.markdown(f"**Legacy selector**  \n`{broken_selector}`")
-    if goal:
-        st.markdown(f"**Extraction goal**  \n{goal}")
-    with st.expander("Inspect raw mutated HTML DOM"):
-        st.code(html_dom or "No HTML loaded yet.", language="html")
 
 with col_right:
     st.markdown("### 2. Self-healing pipeline & verification")
