@@ -37,7 +37,7 @@ cp .env.example .env
 streamlit run app.py
 ```
 
-Choose **Demo: Football (instant)** and click its single button to show the deliberately broken selector followed by the deterministic local repair. This demo uses fixed fixture data and does not call Gemma. Choose **Live: Books to Scrape** to fetch the current site HTML, upload a matching screenshot of its first page, then click the single live-run button. Live mode requires `GEMMA_API_KEY_1` in the ignored `.env` file; if a request with the first key fails, the app tries `GEMMA_API_KEY_2`. Each model request can take up to two minutes. Live failures are shown as failures and do not substitute football demo records.
+Choose **Demo: Football (reliable)** and click its single button to show the deliberately broken selector followed by its repair. If Gemma keys are configured, Gemma attempts the repair; the verified football preset is the fallback if the model fails or proposes selectors that do not verify. Without keys, the demo runs deterministically offline. Choose **Live: Books to Scrape** to fetch the current site HTML, upload a matching screenshot of its first page, then click the single live-run button. Live mode requires `GEMMA_API_KEY_1` in the ignored `.env` file; if a request with the first key fails, the app tries `GEMMA_API_KEY_2`. Each model request can take up to two minutes. Live failures are shown as failures and do not substitute football demo records.
 
 ## Quickstart: CLI Agent Skill
 

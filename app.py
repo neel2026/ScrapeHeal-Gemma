@@ -57,7 +57,7 @@ st.markdown(
 with st.sidebar:
     st.markdown("## Run a pipeline")
     api_keys = configured_api_keys()
-    run_mode = st.radio("Run mode", ("Demo: Football (instant)", "Live: Books to Scrape"))
+    run_mode = st.radio("Run mode", ("Demo: Football (reliable)", "Live: Books to Scrape"))
     model_id = st.selectbox(
         "Gemma 4 model",
         ALLOWED_MODELS,
@@ -75,7 +75,7 @@ if st.session_state.get("_active_mode") != run_mode:
         st.session_state.pop(key, None)
     st.session_state["_active_mode"] = run_mode
 
-demo_mode = run_mode == "Demo: Football (instant)"
+demo_mode = run_mode == "Demo: Football (reliable)"
 preset = build_preset("football_league") if demo_mode else None
 if demo_mode:
     html_dom = preset.html
@@ -92,7 +92,7 @@ col_left, col_right = st.columns([1.05, 0.95], gap="large")
 with col_left:
     st.markdown("### 1. Target webpage viewport & DOM")
     if demo_mode:
-        st.caption("Deterministic demo: preset football page with a deliberately broken legacy selector.")
+        st.caption("Football fixture with a deliberately broken selector. When keys are configured, Gemma tries to repair it; a local fallback keeps the demo reliable.")
         st.image(screenshot, width="stretch", caption="Football layout supplied to the demo healing step")
     else:
         st.markdown(f"Live website: [{BOOKS_TO_SCRAPE_URL}]({BOOKS_TO_SCRAPE_URL})")
@@ -172,8 +172,12 @@ with col_right:
     result = st.session_state.get("heal_result")
     if result:
         ver = result["verification"]
-        if demo_mode:
-            st.info("Deterministic demo: the displayed Gemma-style repair and records are preset so this walkthrough always runs offline.")
+        if demo_mode and result.get("offline_mock"):
+            st.info("Deterministic local demo: no API keys are configured, so this run did not call Gemma.")
+        elif demo_mode and result.get("offline_fallback"):
+            st.warning("Gemma did not produce a verified selector; the demo completed with its verified football preset repair.")
+        elif demo_mode:
+            st.info("Gemma repaired the football fixture live; its records are fixed demo data.")
         elif result.get("api_key_failovers"):
             st.info("The first Gemma API key failed; the request succeeded with the second key.")
         if ver["verified"]:
@@ -235,7 +239,12 @@ with col_right:
                     "records": preset.records,
                     "xpath": preset.xpath,
                 }
-            with st.spinner("Gemma 4 is comparing the screenshot and DOM. This can take up to two minutes per request; BeautifulSoup will verify the result…"):
+            progress_message = (
+                "Running the deterministic football repair…"
+                if demo_mode and not api_keys
+                else "Gemma 4 is comparing the screenshot and DOM. This can take up to two minutes per request; BeautifulSoup will verify the result…"
+            )
+            with st.spinner(progress_message):
                 result = heal_scraper_with_gemma4(
                     html_dom,
                     screenshot,
@@ -243,7 +252,7 @@ with col_right:
                     goal,
                     model_id=model_id,
                     thinking_level=thinking_level,
-                    offline_mock=demo_mode,
+                    offline_mock=demo_mode and not bool(api_keys),
                     preset_hint=hint,
                 )
             st.session_state["heal_result"] = result
@@ -251,4 +260,9 @@ with col_right:
             st.session_state["run_error"] = str(exc)
 
             label = "Verified on Books to Scrape HTML" if not demo_mode else "Verified on football demo HTML"
-        origin = "Deterministic local demo" if demo_mode else "Gemma 4 live inference"
+        if result.get("offline_mock"):
+            origin = "Deterministic local demo"
+        elif result.get("offline_fallback"):
+            origin = "Verified football preset fallback"
+        else:
+            origin = "Gemma 4 live inference"

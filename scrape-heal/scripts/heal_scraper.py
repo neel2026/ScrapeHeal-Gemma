@@ -332,6 +332,15 @@ def heal_scraper_with_gemma4(
                 str(analysis["healed_row_css_selector"]),
                 analysis["healed_field_selectors"],
             )
+            if not verification["verified"] and preset_hint:
+                fallback_error = verification["error"] or "Gemma's corrected selectors did not pass local verification."
+                offline_fallback = True
+                analysis = _mock_result(None, preset_hint)
+                verification = verify_healed_selectors(
+                    html_dom,
+                    str(analysis["healed_row_css_selector"]),
+                    analysis["healed_field_selectors"],
+                )
         except Exception as exc:
             if not preset_hint:
                 raise

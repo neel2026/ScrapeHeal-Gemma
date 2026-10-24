@@ -200,6 +200,35 @@ class DashboardRegressionTests(unittest.TestCase):
         self.assertTrue(app.session_state["heal_result"]["offline_mock"])
         self.assertEqual(app.session_state["heal_result"]["verification"]["matched_row_count"], 5)
 
+    def test_demo_uses_gemma_when_a_key_is_configured(self):
+        from streamlit.testing.v1 import AppTest
+
+        preset = build_preset("football_league")
+        proposal = {
+            "visual_analysis": "Football rows are rendered as cards.",
+            "dom_mutation_diagnosis": "The old table is gone; club data is in repeated cards.",
+            "reasoning_summary": "Matched the visible club rows to card containers.",
+            "healed_row_css_selector": preset.row_selector,
+            "healed_field_selectors": preset.field_selectors,
+            "healed_xpath": preset.xpath,
+            "confidence_score": 95,
+            "visual_extracted_data": preset.records,
+            "patched_python_code": "print('football')",
+            "mermaid_diagram": "flowchart LR\n A[Football] --> B[Verified]",
+        }
+        client = mock.Mock()
+        client.models.generate_content.return_value = SimpleNamespace(text=json.dumps(proposal))
+        with mock.patch.dict("os.environ", {"GEMMA_API_KEY_1": "test-key-one"}), \
+             mock.patch("scripts.heal_scraper.genai.Client", return_value=client):
+            app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
+            next(button for button in app.button if button.label == "Run Demo: broken selector → repaired selector").click().run()
+
+        self.assertFalse(app.exception)
+        self.assertEqual(client.models.generate_content.call_count, 1)
+        self.assertTrue(app.session_state["heal_result"]["verified_on_dom"])
+        self.assertFalse(app.session_state["heal_result"]["offline_mock"])
+        self.assertFalse(app.session_state["heal_result"]["offline_fallback"])
+
     def test_live_mode_exposes_books_to_scrape_inputs(self):
         app = self.dashboard()
         next(radio for radio in app.radio if radio.label == "Run mode").set_value("Live: Books to Scrape").run()
@@ -355,6 +384,23 @@ class EngineRegressionTests(unittest.TestCase):
         self.assertTrue(first["offline_fallback"])
         self.assertFalse(second["offline_fallback"])
         self.assertEqual(client.models.generate_content.call_count, 2)
+
+    def test_preset_demo_falls_back_when_model_cannot_verify_after_correction(self):
+        html = '<article class="item"><b>A</b></article>'
+        client = self.client_for(self.proposal(".missing"), self.proposal(".still-missing"))
+        hint = {
+            "row_selector": ".item",
+            "field_selectors": {"name": "b"},
+            "records": [{"name": "A"}],
+            "xpath": "//article[@class='item']",
+        }
+        result = heal_scraper_with_gemma4(
+            html, self.image, ".old", "Extract names", client=client, preset_hint=hint
+        )
+
+        self.assertTrue(result["offline_fallback"])
+        self.assertTrue(result["verified_on_dom"])
+        self.assertEqual(result["verification"]["deterministic_records"], [{"name": "A"}])
 
     def test_cache_distinguishes_changes_beyond_prompt_cutoff(self):
         prefix = "<p>" + "x" * 16000 + "</p>"
