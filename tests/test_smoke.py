@@ -1,7 +1,9 @@
 from pathlib import Path
+import json
 import sys
 import re
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,6 +17,7 @@ from scripts.heal_scraper import (
     verify_healed_selectors,
 )
 from scripts.presets import PRESETS, build_preset
+from scripts import heal_scraper as engine
 
 
 class SmokeTests(unittest.TestCase):
@@ -132,6 +135,43 @@ class SmokeTests(unittest.TestCase):
         self.assertIn("--preset", content)
         self.assertIn("--offline-mock", content)
         self.assertIn("references/REFERENCE.md", content)
+
+
+class EngineRegressionTests(unittest.TestCase):
+    def setUp(self):
+        engine._RESPONSE_CACHE.clear()
+        engine._REQUEST_TIMESTAMPS.clear()
+        self.image = build_preset("cloud_gpu").image
+
+    def proposal(self, row_selector=".item"):
+        return {
+            "visual_analysis": "Repeated item cards.",
+            "dom_mutation_diagnosis": "Legacy table replaced by cards.",
+            "reasoning_summary": "The item cards correspond to repeated DOM containers.",
+            "healed_row_css_selector": row_selector,
+            "healed_field_selectors": {"name": "b"},
+            "healed_xpath": "//article",
+            "confidence_score": 90,
+            "visual_extracted_data": [{"name": "A"}],
+            "patched_python_code": "print('example')",
+            "mermaid_diagram": "flowchart LR\n A[DOM] --> B[Records]",
+        }
+
+    def client_for(self, *responses):
+        client = mock.Mock()
+        client.models.generate_content.side_effect = [
+            response if isinstance(response, Exception) else SimpleNamespace(text=json.dumps(response))
+            for response in responses
+        ]
+        return client
+
+    def test_verification_uses_full_dom_after_prompt_truncation(self):
+        html = '<article class="item"><b>A</b></article><p>' + "x" * 16000 + '</p><article class="item"><b>B</b></article>'
+        result = heal_scraper_with_gemma4(
+            html, self.image, ".old", "Extract all names", client=self.client_for(self.proposal())
+        )
+        self.assertTrue(result["verified_on_dom"])
+        self.assertEqual(result["verification"]["deterministic_records"], [{"name": "A"}, {"name": "B"}])
 
 
 if __name__ == "__main__":

@@ -237,7 +237,7 @@ def heal_scraper_with_gemma4(
             analysis = _mock_result(None, preset_hint)
 
     verification = verify_healed_selectors(
-        cleaned_dom,
+        html_dom,
         str(analysis["healed_row_css_selector"]),
         analysis["healed_field_selectors"],
     )
@@ -247,7 +247,7 @@ def heal_scraper_with_gemma4(
         try:
             analysis = call_model(correction_error)
             verification = verify_healed_selectors(
-                cleaned_dom,
+                html_dom,
                 str(analysis["healed_row_css_selector"]),
                 analysis["healed_field_selectors"],
             )
@@ -258,7 +258,7 @@ def heal_scraper_with_gemma4(
             offline_fallback = True
             analysis = _mock_result(None, preset_hint)
             verification = verify_healed_selectors(
-                cleaned_dom,
+                html_dom,
                 str(analysis["healed_row_css_selector"]),
                 analysis["healed_field_selectors"],
             )
