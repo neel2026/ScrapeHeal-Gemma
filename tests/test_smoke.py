@@ -3,6 +3,8 @@ import json
 import sys
 import re
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from types import SimpleNamespace
 from unittest import mock
 
@@ -79,6 +81,25 @@ class SmokeTests(unittest.TestCase):
         self.assertIn("field_selectors", result["patched_python_code"])
         with self.assertRaises(ValueError):
             heal_scraper_with_gemma4(preset.html, preset.image, "x", "y", model_id="unsupported-model")
+
+    def test_explicit_offline_demo_stays_deterministic_with_live_keys_configured(self):
+        preset = build_preset("football_league")
+        hint = {
+            "row_selector": preset.row_selector,
+            "field_selectors": preset.field_selectors,
+            "records": preset.records,
+            "xpath": preset.xpath,
+        }
+        with mock.patch.dict("os.environ", {
+            "GEMMA_API_KEY_1": "test-primary",
+            "GEMMA_API_KEY_2": "test-backup",
+        }):
+            result = heal_scraper_with_gemma4(
+                preset.html, preset.image, preset.broken_selector, preset.goal,
+                offline_mock=True, preset_hint=hint,
+            )
+        self.assertTrue(result["offline_mock"])
+        self.assertTrue(result["verified_on_dom"])
 
     def test_failed_selector_gets_one_self_correction_call(self):
         preset = build_preset("football_league")
@@ -165,26 +186,81 @@ class DashboardRegressionTests(unittest.TestCase):
 
     def test_changed_settings_clear_previous_verification(self):
         app = self.dashboard()
-        next(button for button in app.button if "Step 2:" in button.label).click().run()
+        next(button for button in app.button if button.label == "Run Demo: broken selector → repaired selector").click().run()
         self.assertTrue(app.session_state["heal_result"]["verified_on_dom"])
         next(radio for radio in app.radio if radio.label == "Gemma 4 thinking level").set_value("minimal").run()
         self.assertFalse(app.exception)
         self.assertNotIn("heal_result", app.session_state)
 
-    def test_url_fetch_keeps_one_snapshot_until_explicit_refresh(self):
-        response = SimpleNamespace(text='<article><b>A</b></article>', raise_for_status=lambda: None)
-        with mock.patch("requests.get", return_value=response) as get:
-            app = self.dashboard()
-            next(x for x in app.selectbox if x.label == "Scenario").select("Custom Live URL / Screenshot Upload").run()
-            next(x for x in app.radio if x.label == "HTML source").set_value("Fetch URL").run()
-            next(x for x in app.text_input if x.label == "Page URL").set_value("https://example.com/catalog").run()
-            self.assertEqual(get.call_count, 0)
-            next(x for x in app.button if x.label == "Fetch webpage HTML").click().run()
-            self.assertEqual(get.call_count, 1)
-            next(x for x in app.text_input if x.label == "Extraction goal").set_value("Extract name").run()
-            next(x for x in app.button if "Step 1:" in x.label).click().run()
-            self.assertEqual(get.call_count, 1)
-            self.assertFalse(app.exception)
+    def test_demo_button_runs_broken_selector_and_repair_together(self):
+        app = self.dashboard()
+        next(button for button in app.button if button.label == "Run Demo: broken selector → repaired selector").click().run()
+        self.assertEqual(app.session_state["legacy_result"]["matched_count"], 0)
+        self.assertTrue(app.session_state["heal_result"]["verified_on_dom"])
+        self.assertTrue(app.session_state["heal_result"]["offline_mock"])
+        self.assertEqual(app.session_state["heal_result"]["verification"]["matched_row_count"], 5)
+
+    def test_live_mode_exposes_books_to_scrape_inputs(self):
+        app = self.dashboard()
+        next(radio for radio in app.radio if radio.label == "Run mode").set_value("Live: Books to Scrape").run()
+        self.assertTrue(any(x.label == "Screenshot of Books to Scrape" for x in app.file_uploader))
+        self.assertTrue(any(x.label == "Broken legacy selector" for x in app.text_input))
+        self.assertTrue(any(button.label == "Run Live: fetch Books to Scrape → heal with Gemma" for button in app.button))
+        self.assertFalse(app.exception)
+
+    def test_live_books_button_fetches_html_and_runs_gemma_without_demo_fallback(self):
+        from io import BytesIO
+
+        from streamlit.testing.v1 import AppTest
+
+        html = """<html><title>Books to Scrape</title><article class="product_pod">
+        <h3><a title="A Light in the Attic">A Light in the ...</a></h3><p class="price_color">£51.77</p>
+        <p class="availability">In stock</p></article></html>"""
+        response = SimpleNamespace(text=html, raise_for_status=lambda: None, url="https://books.toscrape.com/")
+        proposal = {
+            "visual_analysis": "A single product card is visible.",
+            "dom_mutation_diagnosis": "The old table selector no longer matches the card layout.",
+            "reasoning_summary": "The repeated product card maps to one book record.",
+            "healed_row_css_selector": "article.product_pod",
+            "healed_field_selectors": {"title": "h3 a::attr(title)", "price": ".price_color", "availability": ".availability"},
+            "healed_xpath": "//article[contains(@class, 'product_pod')]",
+            "confidence_score": 95,
+            "visual_extracted_data": [{"title": "A Light in the Attic", "price": "£51.77", "availability": "In stock"}],
+            "patched_python_code": "print('books')",
+            "mermaid_diagram": "flowchart LR\n A[Books] --> B[Verified]",
+        }
+        client = mock.Mock()
+        client.models.generate_content.return_value = SimpleNamespace(text=json.dumps(proposal))
+        original_heal = engine.heal_scraper_with_gemma4
+
+        def live_heal(*args, **kwargs):
+            self.assertFalse(kwargs["offline_mock"])
+            self.assertIsNone(kwargs["preset_hint"])
+            return original_heal(*args, client=client, **kwargs)
+
+        screenshot_buffer = BytesIO()
+        build_preset("football_league").image.save(screenshot_buffer, format="PNG")
+        with mock.patch.dict("os.environ", {"GEMMA_API_KEY_1": "test-key-one"}), \
+             mock.patch("scripts.live_examples.requests.get", return_value=response) as get, \
+             mock.patch("scripts.heal_scraper.heal_scraper_with_gemma4", side_effect=live_heal):
+            app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
+            next(radio for radio in app.radio if radio.label == "Run mode").set_value("Live: Books to Scrape").run()
+            next(item for item in app.file_uploader if item.label == "Screenshot of Books to Scrape").upload(
+                "books.png", screenshot_buffer.getvalue(), "image/png"
+            ).run()
+            next(button for button in app.button if button.label == "Run Live: fetch Books to Scrape → heal with Gemma").click().run()
+
+        self.assertFalse(app.exception)
+        self.assertEqual(get.call_count, 1)
+        self.assertEqual(client.models.generate_content.call_count, 1)
+        self.assertEqual(app.session_state["legacy_result"]["matched_count"], 0)
+        live_result = app.session_state["heal_result"]
+        self.assertFalse(live_result["offline_mock"])
+        self.assertFalse(live_result["offline_fallback"])
+        self.assertEqual(live_result["verification"]["deterministic_records"], [
+            {"title": "A Light in the Attic", "price": "£51.77", "availability": "In stock"}
+        ])
+        self.assertIn("def extract_field", live_result["patched_python_code"])
 
     def test_api_key_is_read_from_environment_not_streamlit_input(self):
         app = self.dashboard()
@@ -327,7 +403,62 @@ class EngineRegressionTests(unittest.TestCase):
         self.assertTrue(result["verified_on_dom"])
         options = create.call_args.kwargs.get("http_options")
         self.assertIsNotNone(options)
-        self.assertEqual(options.timeout, 45000)
+        self.assertEqual(options.timeout, 120000)
+
+    def test_books_to_scrape_fetch_uses_live_html_and_timeout(self):
+        from scripts.live_examples import fetch_books_to_scrape
+
+        html = '<html><title>Books to Scrape</title><article class="product_pod"><h3>Book</h3></article></html>'
+        response = SimpleNamespace(text=html, raise_for_status=lambda: None, url="https://books.toscrape.com/")
+        with mock.patch("scripts.live_examples.requests.get", return_value=response) as get:
+            fetched = fetch_books_to_scrape()
+
+        self.assertEqual(fetched, html)
+        self.assertEqual(get.call_args.args[0], "https://books.toscrape.com/")
+        self.assertGreaterEqual(get.call_args.kwargs["timeout"], 30)
+
+    def test_books_to_scrape_fetch_rejects_unexpected_page(self):
+        from scripts.live_examples import fetch_books_to_scrape
+
+        response = SimpleNamespace(text="<html><title>Login</title></html>", raise_for_status=lambda: None, url="https://books.toscrape.com/")
+        with mock.patch("scripts.live_examples.requests.get", return_value=response):
+            with self.assertRaisesRegex(ValueError, "did not look like Books to Scrape"):
+                fetch_books_to_scrape()
+
+    def test_books_to_scrape_fetch_uses_detected_encoding_for_currency(self):
+        import requests
+
+        from scripts.live_examples import fetch_books_to_scrape
+
+        response = requests.Response()
+        response.status_code = 200
+        response.url = "https://books.toscrape.com/"
+        response.encoding = "ISO-8859-1"
+        response._content = (
+            b'<meta charset="utf-8"><article class="product_pod">'
+            b'<p class="price_color">\xc2\xa351.77</p></article>'
+        )
+        with mock.patch("scripts.live_examples.requests.get", return_value=response):
+            fetched = fetch_books_to_scrape()
+
+        self.assertIn("£51.77", fetched)
+        self.assertNotIn("Â£51.77", fetched)
+
+    def test_verifier_reads_full_book_title_from_attribute_selector(self):
+        html = '<article class="product_pod"><h3><a title="A Full Book Title">A Full Book ...</a></h3></article>'
+        result = verify_healed_selectors(html, "article.product_pod", {"title": "h3 a::attr(title)"})
+
+        self.assertTrue(result["verified"])
+        self.assertEqual(result["deterministic_records"], [{"title": "A Full Book Title"}])
+
+    def test_generated_patch_script_extracts_full_attribute_values(self):
+        html = '<article class="product_pod"><h3><a title="A Full Book Title">A Full Book ...</a></h3></article>'
+        code = engine._patched_code("article.product_pod", {"title": "h3 a::attr(title)"})
+        captured = StringIO()
+        with mock.patch("builtins.open", mock.mock_open(read_data=html)), redirect_stdout(captured):
+            exec(compile(code, "<patched scraper>", "exec"), {})
+
+        self.assertEqual(json.loads(captured.getvalue()), [{"title": "A Full Book Title"}])
 
     def test_empty_rows_are_not_reported_as_verified_extraction(self):
         result = verify_healed_selectors('<div class="item"><b>A</b></div><div class="item"></div>', ".item", {"name": "b"})

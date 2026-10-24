@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import hashlib
 import sys
+from html import escape
 from pathlib import Path
 
-import requests
 import streamlit as st
 from PIL import Image
 
@@ -15,7 +15,8 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "scrape-heal"))
 
 from scripts.heal_scraper import ALLOWED_MODELS, configured_api_keys, heal_scraper_with_gemma4, verify_broken_selector
-from scripts.presets import PRESETS, build_preset
+from scripts.live_examples import BOOKS_TO_SCRAPE_URL, fetch_books_to_scrape
+from scripts.presets import build_preset
 
 
 st.set_page_config(page_title="ScrapeHeal-Gemma", page_icon="🩹", layout="wide")
@@ -54,9 +55,9 @@ st.markdown(
 )
 
 with st.sidebar:
-    st.markdown("## Demo controls")
+    st.markdown("## Run a pipeline")
     api_keys = configured_api_keys()
-    st.caption("Gemma API keys load from .env. Key 2 is tried if a request with key 1 fails.")
+    run_mode = st.radio("Run mode", ("Demo: Football (instant)", "Live: Books to Scrape"))
     model_id = st.selectbox(
         "Gemma 4 model",
         ALLOWED_MODELS,
@@ -67,95 +68,92 @@ with st.sidebar:
         ),
     )
     thinking_level = st.radio("Gemma 4 thinking level", ("high", "minimal"), horizontal=True)
-    scenario = st.selectbox("Scenario", [*PRESETS.values(), "Custom Live URL / Screenshot Upload"])
-    if not api_keys:
-        st.caption("No Gemma API key found. Built-in scenarios run in clearly labeled offline demo mode.")
+    st.caption("API keys load from .env. Key 2 is tried if key 1 fails.")
 
-if st.session_state.get("_active_scenario") != scenario:
-    st.session_state.pop("legacy_result", None)
-    st.session_state.pop("heal_result", None)
-    st.session_state["_active_scenario"] = scenario
+if st.session_state.get("_active_mode") != run_mode:
+    for key in ("legacy_result", "heal_result", "run_error", "_books_html"):
+        st.session_state.pop(key, None)
+    st.session_state["_active_mode"] = run_mode
 
-preset = None
-custom_html = ""
-custom_image = None
-custom_broken_selector = ""
-custom_goal = ""
-if scenario != "Custom Live URL / Screenshot Upload":
-    preset_key = next(key for key, label in PRESETS.items() if label == scenario)
-    preset = build_preset(preset_key)
-    html_dom, screenshot = preset.html, preset.image
-    broken_selector, goal = preset.broken_selector, preset.goal
+demo_mode = run_mode == "Demo: Football (instant)"
+preset = build_preset("football_league") if demo_mode else None
+if demo_mode:
+    html_dom = preset.html
+    screenshot = preset.image
+    broken_selector = preset.broken_selector
+    goal = preset.goal
 else:
-    st.markdown("### Custom webpage input")
-    left_input, right_input = st.columns(2)
-    with left_input:
-        source_mode = st.radio("HTML source", ("Paste HTML", "Fetch URL", "Upload HTML file"), horizontal=True)
-        if source_mode == "Paste HTML":
-            custom_html = st.text_area("Mutated HTML DOM", height=180, placeholder="Paste the updated page HTML…")
-        elif source_mode == "Fetch URL":
-            url = st.text_input("Page URL", placeholder="https://example.com/catalog")
-            if st.button("Fetch webpage HTML", disabled=not bool(url)):
-                try:
-                    response = requests.get(url, timeout=20, headers={"User-Agent": "ScrapeHeal-Gemma/1.0"})
-                    response.raise_for_status()
-                    st.session_state["_url_snapshot"] = {"url": url, "html": response.text}
-                except requests.RequestException as exc:
-                    st.session_state.pop("_url_snapshot", None)
-                    st.error(f"Could not fetch the page: {exc}")
-            snapshot = st.session_state.get("_url_snapshot")
-            if snapshot and snapshot["url"] == url:
-                custom_html = snapshot["html"]
-                st.success(f"Loaded snapshot: {len(custom_html):,} HTML characters")
-        else:
-            html_file = st.file_uploader("HTML file", type=("html", "htm", "txt"))
-            if html_file:
-                custom_html = html_file.getvalue().decode("utf-8", errors="replace")
-    with right_input:
-        image_file = st.file_uploader("Screenshot sent to Gemma 4", type=("png", "jpg", "jpeg"))
-        if image_file:
-            custom_image = Image.open(image_file).convert("RGB")
-        custom_broken_selector = st.text_input("Broken legacy selector", placeholder="table.old-list tr")
-        custom_goal = st.text_input("Extraction goal", placeholder="Extract product name, price, and stock")
-    html_dom, screenshot = custom_html, custom_image
-    broken_selector, goal = custom_broken_selector, custom_goal
+    html_dom = st.session_state.get("_books_html", "")
+    screenshot = None
+    broken_selector = "table.legacy-book-list tbody tr"
+    goal = "Extract each book's title, price, and availability from the visible listing."
 
 col_left, col_right = st.columns([1.05, 0.95], gap="large")
 with col_left:
-    st.markdown("### 1. Target webpage viewport & mutated DOM")
-    if screenshot is not None:
-        st.image(screenshot, width="stretch", caption="Visual input passed to Gemma 4 Vision")
+    st.markdown("### 1. Target webpage viewport & DOM")
+    if demo_mode:
+        st.caption("Deterministic demo: preset football page with a deliberately broken legacy selector.")
+        st.image(screenshot, width="stretch", caption="Football layout supplied to the demo healing step")
     else:
-        st.info("Choose a preset or upload a webpage screenshot to start.")
-    if preset:
-        broken_selector = st.text_input("Legacy CSS selector", value=preset.broken_selector, key=f"selector_{preset.key}")
-        goal = st.text_input("Extraction goal", value=preset.goal, key=f"goal_{preset.key}")
+        st.markdown(f"Live website: [{BOOKS_TO_SCRAPE_URL}]({BOOKS_TO_SCRAPE_URL})")
+        st.caption("The page HTML is fetched when you run the pipeline. Open the site, take a screenshot of its first page, and upload it here so Gemma sees the matching layout.")
+        screenshot_file = st.file_uploader("Screenshot of Books to Scrape", type=("png", "jpg", "jpeg"))
+        if screenshot_file:
+            try:
+                screenshot = Image.open(screenshot_file).convert("RGB")
+                st.image(screenshot, width="stretch", caption="Screenshot passed to Gemma 4 Vision")
+            except Exception as exc:
+                st.error(f"Could not read the screenshot: {exc}")
+        broken_selector = st.text_input("Broken legacy selector", value=broken_selector)
+        goal = st.text_input("Extraction goal", value=goal)
+        if not api_keys:
+            st.warning("Live mode needs GEMMA_API_KEY_1 in the ignored .env file. The demo works without API keys.")
     if broken_selector:
         st.markdown(f"**Legacy selector**  \n`{broken_selector}`")
     if goal:
         st.markdown(f"**Extraction goal**  \n{goal}")
-    with st.expander("Inspect raw mutated HTML DOM"):
-        st.code(html_dom or "No HTML loaded yet.", language="html")
+    with st.expander("Inspect page HTML DOM"):
+        st.code(html_dom or "Books to Scrape HTML will be fetched when you run the live pipeline.", language="html")
 
 input_fingerprint = hashlib.sha256(
-    html_dom.encode("utf-8")
-    + (screenshot.tobytes() if screenshot is not None else b"")
-    + json.dumps([broken_selector, goal, model_id, thinking_level,
-                  [hashlib.sha256(key.encode()).hexdigest() for key in api_keys],
-                  screenshot.size if screenshot is not None else None]).encode()
+    json.dumps([
+        run_mode,
+        broken_selector,
+        goal,
+        model_id,
+        thinking_level,
+        [hashlib.sha256(key.encode()).hexdigest() for key in api_keys],
+        screenshot.size if screenshot is not None else None,
+        hashlib.sha256(screenshot.tobytes()).hexdigest() if screenshot is not None else None,
+    ]).encode()
 ).hexdigest()
 if st.session_state.get("_input_fingerprint") != input_fingerprint:
-    st.session_state.pop("legacy_result", None)
-    st.session_state.pop("heal_result", None)
+    for key in ("legacy_result", "heal_result", "run_error"):
+        st.session_state.pop(key, None)
     st.session_state["_input_fingerprint"] = input_fingerprint
 
 with col_right:
     st.markdown("### 2. Self-healing pipeline & verification")
-    run_legacy = st.button("🚨 Step 1: Run Legacy Scraper (Test Selector)", width="stretch")
-    if run_legacy:
-        if not html_dom or not broken_selector:
-            st.warning("Load HTML and enter the broken selector first.")
-        else:
+    button_label = (
+        "Run Demo: broken selector → repaired selector"
+        if demo_mode
+        else "Run Live: fetch Books to Scrape → heal with Gemma"
+    )
+    run_pipeline = st.button(button_label, type="primary", width="stretch")
+    if run_pipeline:
+        st.session_state.pop("legacy_result", None)
+        st.session_state.pop("heal_result", None)
+        st.session_state.pop("run_error", None)
+        try:
+            if not demo_mode:
+                if screenshot is None:
+                    raise ValueError("Upload a screenshot of the current Books to Scrape page first.")
+                if not api_keys:
+                    raise ValueError("Live mode needs GEMMA_API_KEY_1 in .env.")
+                with st.spinner("Fetching the live Books to Scrape HTML…"):
+                    html_dom = fetch_books_to_scrape()
+                st.session_state["_books_html"] = html_dom
+
             legacy = verify_broken_selector(html_dom, broken_selector)
             st.session_state["legacy_result"] = legacy
     legacy_result = st.session_state.get("legacy_result")
@@ -163,54 +161,24 @@ with col_right:
         if legacy_result["matched_count"] == 0:
             error = legacy_result["error"] or "0 elements matched"
             st.markdown(
-                f"<div class='redtrace'>SelectorError: 0 elements matched <code>{broken_selector}</code> in current DOM<br>{error}</div>",
+                f"<div class='redtrace'>SelectorError: 0 elements matched <code>{escape(broken_selector)}</code> in current DOM<br>{escape(error)}</div>",
                 unsafe_allow_html=True,
             )
         else:
             st.success(f"Legacy selector unexpectedly matched {legacy_result['matched_count']} elements.")
-
-    run_heal = st.button("✨ Step 2: Auto-Heal with Gemma 4 Multimodal", type="primary", width="stretch")
-    if run_heal:
-        if not html_dom or screenshot is None or not broken_selector or not goal:
-            st.warning("Provide HTML, screenshot, broken selector, and extraction goal.")
-        elif not api_keys and preset is None:
-            st.error("Custom pages need GEMMA_API_KEY_1 in .env. Offline demo mode is available for built-in scenarios.")
-        else:
-            try:
-                hint = None
-                if preset:
-                    hint = {
-                        "row_selector": preset.row_selector,
-                        "field_selectors": preset.field_selectors,
-                        "records": preset.records,
-                        "xpath": preset.xpath,
-                    }
-                with st.spinner("Gemma 4 is comparing the screenshot and DOM; BeautifulSoup will verify every row…"):
-                    result = heal_scraper_with_gemma4(
-                        html_dom,
-                        screenshot,
-                        broken_selector,
-                        goal,
-                        model_id=model_id,
-                        thinking_level=thinking_level,
-                        offline_mock=not bool(api_keys),
-                        preset_hint=hint,
-                    )
-                st.session_state["heal_result"] = result
-            except Exception as exc:
-                st.error(f"Healing failed: {exc}")
+    if st.session_state.get("run_error"):
+        st.error(f"Pipeline stopped: {st.session_state['run_error']}")
 
     result = st.session_state.get("heal_result")
     if result:
         ver = result["verification"]
-        origin = "Offline demo fallback" if result.get("offline_mock") or result.get("offline_fallback") else "Gemma 4 live inference"
-        if result.get("api_key_failovers"):
+        if demo_mode:
+            st.info("Deterministic demo: the displayed Gemma-style repair and records are preset so this walkthrough always runs offline.")
+        elif result.get("api_key_failovers"):
             st.info("The first Gemma API key failed; the request succeeded with the second key.")
-        if result.get("fallback_error"):
-            st.warning(f"Gemma 4 was temporarily unavailable; showing verified built-in demo data. {result['fallback_error']}")
         if ver["verified"]:
             st.markdown(
-                f"<span class='badge green'>✅ Verified on Live BeautifulSoup DOM: {ver['matched_row_count']} Rows Extracted Deterministically</span>",
+                f"<span class='badge green'>✅ {label}: {ver['matched_row_count']} rows extracted deterministically</span>",
                 unsafe_allow_html=True,
             )
         else:
@@ -230,10 +198,10 @@ with col_right:
             st.code(result.get("healed_xpath", ""), language="xpath")
         tabs = st.tabs(["📊 Verified Extracted Data", "🧠 Gemma 4 Visual & DOM Reasoning", "🐍 Patched Python Scraper", "🧩 Agent Skill (SKILL.md) & CLI"])
         with tabs[0]:
-            st.dataframe(result["verification"]["deterministic_records"], width="stretch", hide_index=True)
+            st.dataframe(ver["deterministic_records"], width="stretch", hide_index=True)
             st.download_button(
                 "Download verified records as JSON",
-                data=json.dumps(result["verification"]["deterministic_records"], ensure_ascii=False, indent=2),
+                data=json.dumps(ver["deterministic_records"], ensure_ascii=False, indent=2),
                 file_name="scrapeheal-verified-records.json",
                 mime="application/json",
             )
@@ -249,10 +217,38 @@ with col_right:
             st.progress(max(0, min(100, int(result.get("confidence_score", 0)))) / 100, text=f"Confidence: {result.get('confidence_score', 0)}%")
         with tabs[2]:
             st.code(result.get("patched_python_code", ""), language="python")
-            st.caption("Verification: " + ("passed against local DOM" if ver["verified"] else "not verified"))
+            st.caption("Verification: " + ("passed against the page HTML" if ver["verified"] else "not verified"))
         with tabs[3]:
             skill_path = ROOT / "scrape-heal" / "SKILL.md"
             st.markdown(skill_path.read_text(encoding="utf-8"))
             st.code("python scrape-heal/scripts/heal_scraper.py --preset football_league --offline-mock", language="bash")
             st.markdown("**Pipeline**")
             st.markdown("```mermaid\n" + result.get("mermaid_diagram", "") + "\n```")
+            if legacy["matched_count"] != 0:
+                raise ValueError("The legacy selector unexpectedly matched this page; change it to a selector that no longer matches.")
+
+            hint = None
+            if preset:
+                hint = {
+                    "row_selector": preset.row_selector,
+                    "field_selectors": preset.field_selectors,
+                    "records": preset.records,
+                    "xpath": preset.xpath,
+                }
+            with st.spinner("Gemma 4 is comparing the screenshot and DOM. This can take up to two minutes per request; BeautifulSoup will verify the result…"):
+                result = heal_scraper_with_gemma4(
+                    html_dom,
+                    screenshot,
+                    broken_selector,
+                    goal,
+                    model_id=model_id,
+                    thinking_level=thinking_level,
+                    offline_mock=demo_mode,
+                    preset_hint=hint,
+                )
+            st.session_state["heal_result"] = result
+        except Exception as exc:
+            st.session_state["run_error"] = str(exc)
+
+            label = "Verified on Books to Scrape HTML" if not demo_mode else "Verified on football demo HTML"
+        origin = "Deterministic local demo" if demo_mode else "Gemma 4 live inference"

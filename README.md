@@ -15,7 +15,7 @@ flowchart LR
   E -->|Verified| G[Deterministic JSON records]
 ```
 
-The dashboard provides a visual judge demo and an offline preset mode. The CLI returns the same JSON contract for agent workflows. The model's output is never treated as verified until the local DOM check succeeds.
+The dashboard has two one-click walkthroughs: a deterministic football demo and a live Books to Scrape run. The CLI returns the same JSON contract for agent workflows. The model's output is never treated as verified until the local DOM check succeeds.
 
 ## Open-Weight AI Model & License Compliance
 
@@ -37,7 +37,7 @@ cp .env.example .env
 streamlit run app.py
 ```
 
-Choose one of the three built-in scenarios and press the two pipeline buttons in order. With no API key, presets use deterministic offline responses and still run BeautifulSoup verification. For a custom page, provide its HTML or URL, a matching screenshot, the old selector, and an extraction goal. The app reads `GEMMA_API_KEY_1` and `GEMMA_API_KEY_2` from `.env`; if a request with the first key fails, it tries the second. The Streamlit UI does not request keys.
+Choose **Demo: Football (instant)** and click its single button to show the deliberately broken selector followed by the deterministic local repair. This demo uses fixed fixture data and does not call Gemma. Choose **Live: Books to Scrape** to fetch the current site HTML, upload a matching screenshot of its first page, then click the single live-run button. Live mode requires `GEMMA_API_KEY_1` in the ignored `.env` file; if a request with the first key fails, the app tries `GEMMA_API_KEY_2`. Each model request can take up to two minutes. Live failures are shown as failures and do not substitute football demo records.
 
 ## Quickstart: CLI Agent Skill
 

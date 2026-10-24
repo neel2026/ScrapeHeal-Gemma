@@ -37,7 +37,7 @@ python scrape-heal/scripts/heal_scraper.py --url https://example.com/catalog --s
 python scrape-heal/scripts/heal_scraper.py --html-file page.html --screenshot page.png --broken-selector 'ul.products li' --goal 'Extract product name and stock' --output healed.json
 ```
 
-Arguments: `--preset`, `--url`, `--html-file`, `--screenshot`, `--broken-selector`, `--goal`, `--model`, `--thinking-level`, `--output`, and `--offline-mock`. `--url` and `--html-file` require `--screenshot`; screenshots are not fabricated for custom webpages. `--offline-mock` is for CI/demo runs without `GEMMA_API_KEY_1` or `GEMMA_API_KEY_2` and only supports a built-in preset or an explicit mock result in Python.
+Arguments: `--preset`, `--url`, `--html-file`, `--screenshot`, `--broken-selector`, `--goal`, `--model`, `--thinking-level`, `--output`, and `--offline-mock`. `--url` and `--html-file` require `--screenshot`; screenshots are not fabricated for custom webpages. `--offline-mock` explicitly forces deterministic local output for a built-in preset, even when API keys are configured; it is intended for CI and reliable demos.
 
 ## Agent workflow
 
