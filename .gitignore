@@ -1,0 +1,21 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Dependencies & virtual environments
+node_modules/
+dist/
+build/
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Operating System & IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
