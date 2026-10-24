@@ -217,6 +217,17 @@ class EngineRegressionTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     engine._parse_response(json.dumps(invalid))
 
+    def test_correction_receives_the_failed_selector_mapping(self):
+        failed = self.proposal(".missing-card")
+        failed["healed_field_selectors"] = {"name": "b.missing-name"}
+        client = self.client_for(failed, self.proposal())
+        result = heal_scraper_with_gemma4('<article class="item"><b>A</b></article>', self.image, ".old", "names", client=client)
+        self.assertTrue(result["verified_on_dom"])
+        self.assertEqual(result["attempts"], 2)
+        retry_prompt = client.models.generate_content.call_args_list[1].kwargs["contents"][1]
+        self.assertIn(".missing-card", retry_prompt)
+        self.assertIn("b.missing-name", retry_prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

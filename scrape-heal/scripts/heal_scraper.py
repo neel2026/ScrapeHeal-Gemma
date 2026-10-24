@@ -260,9 +260,15 @@ def heal_scraper_with_gemma4(
     )
     if not verification["verified"] and not offline_mock and not offline_fallback:
         correction_error = verification["error"] or "Selector returned 0 rows."
+        correction_context = json.dumps({
+            "failed_row_selector": analysis["healed_row_css_selector"],
+            "failed_field_selectors": analysis["healed_field_selectors"],
+            "matched_row_count": verification["matched_row_count"],
+            "error": correction_error,
+        })
         attempts = 2
         try:
-            analysis = call_model(correction_error)
+            analysis = call_model(correction_context)
             verification = verify_healed_selectors(
                 html_dom,
                 str(analysis["healed_row_css_selector"]),
