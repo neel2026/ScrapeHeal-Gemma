@@ -135,6 +135,29 @@ class SmokeTests(unittest.TestCase):
         self.assertIn("references/REFERENCE.md", content)
 
 
+class DashboardRegressionTests(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict("os.environ", {"GEMINI_API_KEY": ""})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        engine._RESPONSE_CACHE.clear()
+        engine._REQUEST_TIMESTAMPS.clear()
+
+    def dashboard(self):
+        from streamlit.testing.v1 import AppTest
+        app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
+        self.assertFalse(app.exception)
+        return app
+
+    def test_changed_settings_clear_previous_verification(self):
+        app = self.dashboard()
+        next(button for button in app.button if "Step 2:" in button.label).click().run()
+        self.assertTrue(app.session_state["heal_result"]["verified_on_dom"])
+        next(radio for radio in app.radio if radio.label == "Gemma 4 thinking level").set_value("minimal").run()
+        self.assertFalse(app.exception)
+        self.assertNotIn("heal_result", app.session_state)
+
+
 class EngineRegressionTests(unittest.TestCase):
     def setUp(self):
         engine._RESPONSE_CACHE.clear()

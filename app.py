@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import sys
 from pathlib import Path
@@ -118,6 +119,17 @@ else:
         custom_goal = st.text_input("Extraction goal", placeholder="Extract product name, price, and stock")
     html_dom, screenshot = custom_html, custom_image
     broken_selector, goal = custom_broken_selector, custom_goal
+
+input_fingerprint = hashlib.sha256(
+    html_dom.encode("utf-8")
+    + (screenshot.tobytes() if screenshot is not None else b"")
+    + json.dumps([broken_selector, goal, model_id, thinking_level, api_key,
+                  screenshot.size if screenshot is not None else None]).encode()
+).hexdigest()
+if st.session_state.get("_input_fingerprint") != input_fingerprint:
+    st.session_state.pop("legacy_result", None)
+    st.session_state.pop("heal_result", None)
+    st.session_state["_input_fingerprint"] = input_fingerprint
 
 col_left, col_right = st.columns([1.05, 0.95], gap="large")
 with col_left:
